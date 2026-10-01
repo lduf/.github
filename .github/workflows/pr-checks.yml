@@ -123,6 +123,12 @@ jobs:
               err("CHANGELOG.md est modifié : il est généré par le bot de release, ne pas y toucher.")
 
           # --- 4. Champ de version --------------------------------------------
+          # Comparer au point de divergence (merge-base) et non à la base actuelle :
+          # une release survenue sur main après la création de la branche ne doit
+          # pas être imputée à la PR.
+          mb = subprocess.run(["git", "merge-base", base, head],
+                              check=True, capture_output=True, text=True).stdout.strip()
+
           def show(rev: str, path: str) -> str | None:
               r = subprocess.run(["git", "show", f"{rev}:{path}"], capture_output=True, text=True)
               return r.stdout if r.returncode == 0 else None
@@ -145,11 +151,11 @@ jobs:
               (".cz.toml", ("tool", "commitizen", "version")),
           ]
           for path, keys in fields:
-              old, new = toml_get(show(base, path), *keys), toml_get(show(head, path), *keys)
+              old, new = toml_get(show(mb, path), *keys), toml_get(show(head, path), *keys)
               if old != new and old is not None:
                   err(f"{path} : le champ {'.'.join(keys)} passe de {old} à {new}. "
                       "La version est calculée par le bot de release, ne pas la modifier.")
-          old_v, new_v = show(base, "VERSION"), show(head, "VERSION")
+          old_v, new_v = show(mb, "VERSION"), show(head, "VERSION")
           if old_v is not None and (old_v or "").strip() != (new_v or "").strip():
               err("Le fichier VERSION est modifié : la version est calculée par le bot de release.")
 
@@ -167,7 +173,7 @@ jobs:
               def env_keys(text: str | None) -> set[str]:
                   return {l.split("=", 1)[0].strip() for l in (text or "").splitlines()
                           if re.match(r"^\s*[A-Z][A-Z0-9_]*\s*=", l)}
-              removed = env_keys(show(base, env_path)) - env_keys(show(head, env_path)) if env_path else set()
+              removed = env_keys(show(mb, env_path)) - env_keys(show(head, env_path)) if env_path else set()
               if removed:
                   print(f"::warning::Variables d'environnement supprimées ou renommées sans « ! » : "
                         f"{', '.join(sorted(removed))}. C'est un changement cassant pour le déploiement.")
