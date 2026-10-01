@@ -25,7 +25,11 @@ Décisions : [ADR 0003](adr/0003-commitizen-semver-conventional-commits.md) et
 | `docs`, `chore`, `ci`, `test`, `refactor`, `style`, `build`, `revert` | aucune | aucune |
 
 Plusieurs merges rapprochés peuvent sortir en **une seule** release : le bump
-retient le changement le plus fort depuis le dernier tag.
+retient le changement le plus fort depuis le dernier tag. Les runs de release
+se suivent sans s'annuler, mais GitHub ne garde qu'**un** run en attente : les
+runs intermédiaires apparaissent « cancelled » dans l'onglet Actions. C'est
+normal et sans perte, car le run suivant relit `main` et couvre tous les
+commits.
 
 ## Annoncer un changement cassant
 
