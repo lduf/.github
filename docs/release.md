@@ -101,7 +101,7 @@ scripts/setup-repo.sh lduf/mon-app --key ~/chemin/release-bot.pem
 
 Le script règle le merge (squash, titre et description de la PR), crée le
 label `no-deploy`, crée ou met à jour les rulesets `main` et `release-tags`
-(seule l'App de release les contourne) et pose la clé privée de l'App (`RELEASE_APP_PRIVATE_KEY`). Le Client ID de l'App est une valeur par défaut du workflow, pas un secret. Il est
+(seule l'App de release les contourne) et pose l'identité de l'App : variable `RELEASE_APP_CLIENT_ID` et secret `RELEASE_APP_PRIVATE_KEY`. Il est
 idempotent. L'App doit être installée sur le repo : le plus simple est une
 installation « All repositories ».
 

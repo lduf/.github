@@ -46,9 +46,9 @@ on:
         type: string
         default: ''
       release_app_client_id:
-        description: Client ID de la GitHub App de release (pas un secret)
+        description: Client ID de la GitHub App de release (par défaut, variable de repo RELEASE_APP_CLIENT_ID)
         type: string
-        default: Iv23li1N00eylQ1llniH
+        default: ''
       commitizen_version:
         description: Version de commitizen
         type: string
@@ -90,8 +90,14 @@ jobs:
       BRANCH: ${{ inputs.branch }}
       DEPLOY_MODE: ${{ inputs.deploy_mode }}
     steps:
-      - name: Vérifier deploy_mode
+      - name: Vérifier la configuration
+        env:
+          CLIENT_ID: ${{ inputs.release_app_client_id || vars.RELEASE_APP_CLIENT_ID }}
         run: |
+          if [ -z "$CLIENT_ID" ]; then
+            echo "::error::Variable de repo RELEASE_APP_CLIENT_ID absente : lancer scripts/setup-repo.sh (lduf/.github) sur ce repo."
+            exit 1
+          fi
           case "$DEPLOY_MODE" in
             portainer-webhook|oikos-pr|none) ;;
             *) echo "::error::deploy_mode inconnu : $DEPLOY_MODE"; exit 1 ;;
@@ -101,7 +107,7 @@ jobs:
         id: app
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ inputs.release_app_client_id }}
+          client-id: ${{ inputs.release_app_client_id || vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - name: Checkout (branche à jour, historique complet)

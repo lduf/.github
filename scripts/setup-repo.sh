@@ -8,7 +8,8 @@
 #   - rulesets « main » (PR obligatoire, squash, checks requis, pas de
 #     force-push) et « release-tags » (tags v* réservés au bot), avec la
 #     GitHub App de release comme seul acteur qui contourne ;
-#   - secret RELEASE_APP_PRIVATE_KEY si --key est fourni.
+#   - variable RELEASE_APP_CLIENT_ID (identifiant public de l'App) et, si --key
+#     est fourni, secret RELEASE_APP_PRIVATE_KEY.
 #
 # Prérequis : gh authentifié avec un compte admin du repo, jq. L'App doit
 # être installée sur le repo (le plus simple : installation « All
@@ -16,21 +17,28 @@
 #
 # Usage :
 #   scripts/setup-repo.sh lduf/mon-app [--key ~/release-bot.pem]
-#                         [--check "pr-checks / checks"]... [--app-id 5153118]
+#                         [--check "pr-checks / checks"]...
+#
+# Identité de la GitHub App de release : variables d'environnement
+# RELEASE_APP_ID (ID numérique, pour le bypass des rulesets) et
+# RELEASE_APP_CLIENT_ID (pour le token des workflows), ou options --app-id /
+# --client-id. Valeurs par défaut : l'App lduf-release-bot.
 set -euo pipefail
 
-APP_ID=5153118
+APP_ID="${RELEASE_APP_ID:-5153118}"
+CLIENT_ID="${RELEASE_APP_CLIENT_ID:-Iv23li1N00eylQ1llniH}"
 KEY=""
 CHECKS=()
 REPO=""
 
-usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --key) KEY="$2"; shift 2 ;;
     --check) CHECKS+=("$2"); shift 2 ;;
     --app-id) APP_ID="$2"; shift 2 ;;
+    --client-id) CLIENT_ID="$2"; shift 2 ;;
     -h|--help) usage ;;
     -*) echo "Option inconnue : $1" >&2; usage 1 ;;
     *) REPO="$1"; shift ;;
@@ -83,8 +91,11 @@ upsert_ruleset() {
 upsert_ruleset "$HERE/rulesets/main.json"
 upsert_ruleset "$HERE/rulesets/release-tags.json"
 
+echo "==> $REPO : variable RELEASE_APP_CLIENT_ID"
+gh variable set RELEASE_APP_CLIENT_ID --repo "$REPO" --body "$CLIENT_ID"
+
 if [ -n "$KEY" ]; then
-  echo "==> $REPO : secrets de la GitHub App"
+  echo "==> $REPO : clé privée de la GitHub App"
   gh secret set RELEASE_APP_PRIVATE_KEY --repo "$REPO" < "$KEY"
 fi
 

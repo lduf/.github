@@ -65,7 +65,7 @@ Après chaque push sur `main`, le workflow réutilisable `release.yml` (dans
 - Il faut créer et installer une **GitHub App** (permissions `contents: write`,
   `metadata: read`, et `pull-requests: write` sur `lduf/oikos` pour
   `oikos-pr`). Ses identifiants sont stockés en secrets
-  (Client ID en valeur par défaut du workflow, clé privée en secret
+  (Client ID en variable de repo `RELEASE_APP_CLIENT_ID`, clé privée en secret
   `RELEASE_APP_PRIVATE_KEY`). C'est une action manuelle de
   Lucas, documentée en Phase 2.
 - `main` contient des commits qui ne viennent pas d'une PR (ceux du bot). C'est
