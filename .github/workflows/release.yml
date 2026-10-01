@@ -120,7 +120,7 @@ jobs:
 
       - name: Set up uv
         if: inputs.redeploy_version == ''
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.2.0
 
       - name: Bump, CHANGELOG, commit et tag
         id: bump
