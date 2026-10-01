@@ -15,11 +15,15 @@ de PR, et socle commun des apps générées depuis
 - [Release et contrôles de PR](docs/release.md) : quel titre donne quelle
   release, changement cassant, `no-deploy`, mise en place d'un repo.
 - Workflows réutilisables : [`pr-checks.yml`](.github/workflows/pr-checks.yml),
-  [`release.yml`](.github/workflows/release.yml).
+  [`release.yml`](.github/workflows/release.yml), et la qualité par langage
+  (`just check` + build de l'image) : [`ci-python.yml`](.github/workflows/ci-python.yml),
+  [`ci-go.yml`](.github/workflows/ci-go.yml), [`ci-rust.yml`](.github/workflows/ci-rust.yml).
+- [Dashboard Grafana générique](observability/app-generic-dashboard.json)
+  (variable `$app`) : vues HTTP communes à toutes les apps.
 - [`scripts/setup-repo.sh`](scripts/setup-repo.sh) et [`rulesets/`](rulesets/) :
   réglages de merge, label et rulesets d'un repo en une commande.
 - `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` : modèles par
   défaut de l'organisation.
 
-À venir (Phase 3) : `ci-python.yml`, `ci-go.yml`, `ci-rust.yml` et dashboard
-Grafana générique.
+Les apps sont générées par le template Copier
+[`lduf/project_template`](https://github.com/lduf/project_template).

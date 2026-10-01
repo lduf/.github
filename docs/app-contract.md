@@ -8,8 +8,9 @@ spécifique.
 
 - Les mots **DOIT**, **NE DOIT PAS**, **DEVRAIT** et **PEUT** ont le sens de la
   [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
-- Le contrat est versionné (`v1`). Une app déclare la version qu'elle respecte
-  dans sa réponse Copier (`.copier-answers.yml`, clé `contract`). Tout
+- Le contrat est versionné (`v1`). Une app générée par le template indique la
+  version qu'elle respecte dans son `README.md` ; la version du template
+  (`_commit` dans `.copier-answers.yml`) détermine celle du contrat. Tout
   changement incompatible du contrat fait passer en `v2` et passe par une ADR.
 - Décisions associées : [ADR 0006](adr/0006-contrat-app-commun.md).
 
@@ -259,7 +260,8 @@ du déploiement :
 
 - `observability/dashboard.json` : dashboard Grafana **spécifique** à l'app
   (métriques métier). Les vues HTTP génériques sont dans le dashboard commun
-  (`lduf/.github`, variable `$app`), qu'il ne faut pas dupliquer.
+  ([`observability/app-generic-dashboard.json`](../observability/app-generic-dashboard.json),
+  variable `$app`), qu'il ne faut pas dupliquer.
 - `observability/alerts.yml` : règles d'alerte au format Prometheus
   (`groups:`). Le minimum généré par le template :
   - `<App>Down` : `up{job="<app>"} == 0` pendant 2 min ;

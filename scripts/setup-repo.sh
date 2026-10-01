@@ -17,7 +17,7 @@
 #
 # Usage :
 #   scripts/setup-repo.sh lduf/mon-app [--key ~/release-bot.pem]
-#                         [--check "pr-checks / checks"]...
+#                         [--check "pr-checks / checks"]...  (défaut : pr-checks / checks + ci / check)
 #
 # Identité de la GitHub App de release : variables d'environnement
 # RELEASE_APP_ID (ID numérique, pour le bypass des rulesets) et
@@ -45,7 +45,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$REPO" ] || usage 1
-[ ${#CHECKS[@]} -gt 0 ] || CHECKS=("pr-checks / checks")
+[ ${#CHECKS[@]} -gt 0 ] || CHECKS=("pr-checks / checks" "ci / check")
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 GITHUB_ACTIONS_APP_ID=15368  # les checks requis doivent venir de GitHub Actions
