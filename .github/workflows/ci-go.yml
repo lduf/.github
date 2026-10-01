@@ -1,0 +1,49 @@
+name: ci-go
+
+# Qualité d'une app Go (ADR 0002) : exactement `just check` (gofmt, vet,
+# golangci-lint, tests -race), puis build de l'image (sans push).
+# Check requis : « ci / check ».
+#
+#   ci:
+#     if: github.event_name == 'pull_request'
+#     uses: lduf/.github/.github/workflows/ci-go.yml@main
+#     permissions: { contents: read }
+on:
+  workflow_call:
+    inputs:
+      build_image:
+        description: Construire l'image Docker (sans la pousser)
+        type: boolean
+        default: true
+      golangci_lint_version:
+        description: Version de golangci-lint
+        type: string
+        default: latest
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Installer golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: ${{ inputs.golangci_lint_version }}
+          install-only: true
+      - uses: extractions/setup-just@v4
+      - name: just check
+        run: just check
+      - uses: docker/setup-buildx-action@v4
+        if: inputs.build_image
+      - name: Build de l'image
+        if: inputs.build_image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

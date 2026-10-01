@@ -1,0 +1,39 @@
+name: ci-python
+
+# Qualité d'une app Python (ADR 0002) : exactement `just check`, puis build
+# de l'image (sans push). Check requis : « ci / check ».
+#
+#   ci:
+#     if: github.event_name == 'pull_request'
+#     uses: lduf/.github/.github/workflows/ci-python.yml@main
+#     permissions: { contents: read }
+on:
+  workflow_call:
+    inputs:
+      build_image:
+        description: Construire l'image Docker (sans la pousser)
+        type: boolean
+        default: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - uses: extractions/setup-just@v4
+      - name: just check
+        run: just check
+      - uses: docker/setup-buildx-action@v4
+        if: inputs.build_image
+      - name: Build de l'image
+        if: inputs.build_image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

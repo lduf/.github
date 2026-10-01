@@ -105,7 +105,8 @@ dépend de l'input `deploy_mode` :
 scripts/setup-repo.sh lduf/mon-app --key ~/chemin/release-bot.pem
 ```
 
-Le script règle le merge (squash, titre et description de la PR), crée le
+Les checks requis par défaut sont `pr-checks / checks` et `ci / check`. Le
+script règle le merge (squash, titre et description de la PR), crée le
 label `no-deploy`, crée ou met à jour les rulesets `main` et `release-tags`
 (seule l'App de release les contourne) et pose l'identité de l'App : variable `RELEASE_APP_CLIENT_ID` et secret `RELEASE_APP_PRIVATE_KEY`. Il est
 idempotent. L'App doit être installée sur le repo : le plus simple est une
@@ -128,6 +129,10 @@ jobs:
     if: github.event_name == 'pull_request'
     uses: lduf/.github/.github/workflows/pr-checks.yml@main
     permissions: { contents: read, pull-requests: read }
+  ci:  # just check + build de l'image ; python | go | rust
+    if: github.event_name == 'pull_request'
+    uses: lduf/.github/.github/workflows/ci-python.yml@main
+    permissions: { contents: read }
   release:
     if: github.event_name != 'pull_request'
     uses: lduf/.github/.github/workflows/release.yml@main
