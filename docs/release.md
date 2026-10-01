@@ -59,8 +59,14 @@ rétrocompatible. Les deux derniers cas donnent un avertissement, pas un échec.
 - Modification du **champ** de version (`[project].version`,
   `[package].version`, `VERSION`…). Ajouter une dépendance dans
   `pyproject.toml` ou `Cargo.toml` reste permis.
-- Paragraphe de description qui commence par `feat:`, `fix:` ou `perf:` : il
-  finirait dans le CHANGELOG.
+- Ligne de description lue comme un commit par la release : une ligne qui
+  commence par `feat:`, `fix:`, `perf:`, `xxx!:` ou `BREAKING CHANGE:` (hors
+  du paragraphe Breaking prévu). La description devient le corps du commit,
+  et commitizen teste **chaque ligne** pour calculer la version. La
+  reformuler : l'indenter, la mettre entre backticks ou dans une liste.
+
+La longueur de la description n'a pas d'importance : le CHANGELOG ne reprend
+que le **titre** de la PR et le paragraphe `BREAKING CHANGE:`.
 
 ## Label `no-deploy`
 

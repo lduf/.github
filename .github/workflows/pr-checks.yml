@@ -107,12 +107,17 @@ jobs:
           if not title_breaking and breaking_section and not says_no:
               err("Section Breaking : écrire « Non », ou bien ajouter « ! » au titre et "
                   "un paragraphe « BREAKING CHANGE: ».")
-          # Un paragraphe « feat: … » ou « fix: … » dans la description deviendrait
-          # une entrée de CHANGELOG parasite (le corps du squash = la description).
-          for p in paragraphs:
-              if re.match(r"^(feat|fix|perf)(\([^()]*\))?!?:\s", p):
-                  err(f"Paragraphe de description qui ressemble à un commit (« {p[:40]}… ») : "
-                      "le reformuler, il finirait dans le CHANGELOG.")
+          # Le corps du squash = la description. commitizen teste CHAQUE LIGNE du
+          # commit contre son motif de bump : une ligne « feat: … », « xxx!: … » ou
+          # « BREAKING CHANGE: … » ailleurs que dans le paragraphe Breaking prévu
+          # fausserait la version (et le CHANGELOG). On les refuse toutes.
+          bump_line = re.compile(r"^((BREAKING[\-\ ]CHANGE|feat|fix|perf)(\([^()\r\n]*\))?(!)?|\w+(\([^()\r\n]*\))?!):")
+          allowed = {f.splitlines()[0] for f in footers}
+          for line in body.splitlines():
+              line = line.rstrip()
+              if bump_line.match(line) and line not in allowed:
+                  err(f"Ligne de description lue comme un commit par la release (« {line[:50]} ») : "
+                      "la reformuler (ex. l'indenter ou la mettre entre backticks).")
 
           # --- 3. CHANGELOG ---------------------------------------------------
           changed = subprocess.run(
