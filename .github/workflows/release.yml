@@ -138,8 +138,9 @@ jobs:
             git reset --hard "origin/$BRANCH"
             prev_tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
             before=$(git rev-parse HEAD)
-            # 21 = NO_COMMITS_TO_BUMP : rien qui justifie une release.
-            $CZ --no-raise 21 bump --yes
+            # 3 = NO_COMMITS_FOUND (tout est déjà publié, ex. run suivant un lot regroupé),
+            # 21 = NO_COMMITS_TO_BUMP (rien qui justifie une release).
+            $CZ --no-raise 3,21 bump --yes
             if [ "$(git rev-parse HEAD)" = "$before" ]; then
               echo "::notice::Aucun commit feat/fix/perf/breaking depuis ${prev_tag:-le début} : pas de release."
               echo "released=false" >> "$GITHUB_OUTPUT"
