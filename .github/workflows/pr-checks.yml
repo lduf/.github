@@ -1,0 +1,210 @@
+name: pr-checks
+
+# Contrôles communs à toutes les PR (voir docs/release.md et ADR 0003) :
+#   1. titre au format Conventional Commits ;
+#   2. description : sections Quoi / Pourquoi / Breaking ? remplies, et
+#      « ! » dans le titre <=> paragraphe « BREAKING CHANGE: » ;
+#   3. CHANGELOG.md non modifié ;
+#   4. champ de version non modifié (le bot de release s'en charge) ;
+#   5. OpenAPI (optionnel) : un changement cassant détecté par oasdiff sans
+#      « ! » fait échouer la CI ;
+#   6. avertissements (non bloquants) : migration ajoutée ou variable
+#      d'environnement supprimée sans « ! ».
+#
+# Appel (dans le ci.yml de l'app) :
+#   pr-checks:
+#     if: github.event_name == 'pull_request'
+#     uses: lduf/.github/.github/workflows/pr-checks.yml@main
+#     permissions: { contents: read, pull-requests: read }
+# Le check requis par le ruleset s'appelle « pr-checks / checks ».
+on:
+  workflow_call:
+    inputs:
+      openapi_path:
+        description: Spec OpenAPI committée à comparer avec oasdiff (vide = pas de contrôle)
+        type: string
+        default: ''
+      env_example_path:
+        description: Fichier d'exemple des variables d'environnement (suppression = avertissement)
+        type: string
+        default: .env.example
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Titre au format Conventional Commits
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          types: |
+            feat
+            fix
+            perf
+            refactor
+            docs
+            test
+            build
+            ci
+            chore
+            style
+            revert
+          requireScope: false
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Description, CHANGELOG et version
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          ENV_EXAMPLE: ${{ inputs.env_example_path }}
+        shell: python
+        run: |
+          import os, re, subprocess, sys, tomllib
+
+          title = os.environ["PR_TITLE"]
+          body = (os.environ.get("PR_BODY") or "").replace("\r\n", "\n")
+          base, head = os.environ["BASE_SHA"], os.environ["HEAD_SHA"]
+          errors: list[str] = []
+
+          def err(msg: str) -> None:
+              errors.append(msg)
+              print(f"::error::{msg}")
+
+          # --- 2. Description -------------------------------------------------
+          clean = re.sub(r"<!--.*?-->", "", body, flags=re.S)
+          sections: dict[str, str] = {}
+          for m in re.finditer(r"^##\s+(.+?)\s*$(.*?)(?=^##\s|\Z)", clean, flags=re.M | re.S):
+              sections[m.group(1).strip().rstrip("?").strip().lower()] = m.group(2).strip()
+          for name in ("quoi", "pourquoi", "breaking"):
+              if not sections.get(name):
+                  label = "Breaking ?" if name == "breaking" else name.capitalize()
+                  err(f"Section « {label} » absente ou vide dans la description de la PR.")
+
+          title_breaking = re.match(r"^\w+(\([^()]*\))?!:", title) is not None
+          # commitizen lit chaque paragraphe du commit : un paragraphe qui commence
+          # par « BREAKING CHANGE: » rend la release cassante.
+          paragraphs = [p.strip() for p in clean.split("\n\n")]
+          footers = [p for p in paragraphs if re.match(r"^BREAKING[ -]CHANGE:\s*\S", p)]
+          breaking_section = sections.get("breaking", "")
+          says_no = re.fullmatch(r"(non|no|aucun|none|-)\.?", breaking_section, flags=re.I) is not None
+
+          if title_breaking and not footers:
+              err("Titre avec « ! » : la section Breaking doit contenir un paragraphe "
+                  "« BREAKING CHANGE: <description> ».")
+          if footers and not title_breaking:
+              err("La description contient « BREAKING CHANGE: » mais le titre n'a pas de « ! ».")
+          if not title_breaking and breaking_section and not says_no:
+              err("Section Breaking : écrire « Non », ou bien ajouter « ! » au titre et "
+                  "un paragraphe « BREAKING CHANGE: ».")
+          # Un paragraphe « feat: … » ou « fix: … » dans la description deviendrait
+          # une entrée de CHANGELOG parasite (le corps du squash = la description).
+          for p in paragraphs:
+              if re.match(r"^(feat|fix|perf)(\([^()]*\))?!?:\s", p):
+                  err(f"Paragraphe de description qui ressemble à un commit (« {p[:40]}… ») : "
+                      "le reformuler, il finirait dans le CHANGELOG.")
+
+          # --- 3. CHANGELOG ---------------------------------------------------
+          changed = subprocess.run(
+              ["git", "diff", "--name-only", f"{base}...{head}"],
+              check=True, capture_output=True, text=True,
+          ).stdout.split()
+          if "CHANGELOG.md" in changed:
+              err("CHANGELOG.md est modifié : il est généré par le bot de release, ne pas y toucher.")
+
+          # --- 4. Champ de version --------------------------------------------
+          def show(rev: str, path: str) -> str | None:
+              r = subprocess.run(["git", "show", f"{rev}:{path}"], capture_output=True, text=True)
+              return r.stdout if r.returncode == 0 else None
+
+          def toml_get(text: str | None, *keys: str) -> str | None:
+              if text is None:
+                  return None
+              node: object = tomllib.loads(text)
+              for k in keys:
+                  if not isinstance(node, dict) or k not in node:
+                      return None
+                  node = node[k]
+              return str(node)
+
+          fields = [
+              ("pyproject.toml", ("project", "version")),
+              ("pyproject.toml", ("tool", "commitizen", "version")),
+              ("Cargo.toml", ("package", "version")),
+              ("Cargo.toml", ("workspace", "package", "version")),
+              (".cz.toml", ("tool", "commitizen", "version")),
+          ]
+          for path, keys in fields:
+              old, new = toml_get(show(base, path), *keys), toml_get(show(head, path), *keys)
+              if old != new and old is not None:
+                  err(f"{path} : le champ {'.'.join(keys)} passe de {old} à {new}. "
+                      "La version est calculée par le bot de release, ne pas la modifier.")
+          old_v, new_v = show(base, "VERSION"), show(head, "VERSION")
+          if old_v is not None and (old_v or "").strip() != (new_v or "").strip():
+              err("Le fichier VERSION est modifié : la version est calculée par le bot de release.")
+
+          # --- 6. Avertissements ----------------------------------------------
+          if not title_breaking:
+              added = subprocess.run(
+                  ["git", "diff", "--name-only", "--diff-filter=A", f"{base}...{head}"],
+                  check=True, capture_output=True, text=True,
+              ).stdout.split()
+              migrations = [f for f in added if re.search(r"(^|/)(migrations|alembic/versions)/", f)]
+              if migrations:
+                  print(f"::warning::Migration ajoutée sans « ! » ({', '.join(migrations)}) : "
+                        "vérifier qu'elle est rétrocompatible, sinon marquer la PR comme breaking.")
+              env_path = os.environ.get("ENV_EXAMPLE", "")
+              def env_keys(text: str | None) -> set[str]:
+                  return {l.split("=", 1)[0].strip() for l in (text or "").splitlines()
+                          if re.match(r"^\s*[A-Z][A-Z0-9_]*\s*=", l)}
+              removed = env_keys(show(base, env_path)) - env_keys(show(head, env_path)) if env_path else set()
+              if removed:
+                  print(f"::warning::Variables d'environnement supprimées ou renommées sans « ! » : "
+                        f"{', '.join(sorted(removed))}. C'est un changement cassant pour le déploiement.")
+
+          sys.exit(1 if errors else 0)
+
+      # --- 5. OpenAPI (optionnel) ---------------------------------------------
+      - name: Spec OpenAPI présente sur la base ?
+        id: oas
+        if: inputs.openapi_path != ''
+        env:
+          SPEC: ${{ inputs.openapi_path }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git cat-file -e "${BASE_SHA}:${SPEC}" 2>/dev/null && [ -f "$SPEC" ]; then
+            echo "compare=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Pas de spec ${SPEC} sur la base ou la PR : comparaison OpenAPI sautée."
+          fi
+
+      - name: oasdiff (changements cassants)
+        id: oasdiff
+        if: steps.oas.outputs.compare == 'true'
+        continue-on-error: true
+        uses: oasdiff/oasdiff-action/breaking@v0.1.18
+        with:
+          base: ${{ github.event.pull_request.base.sha }}:${{ inputs.openapi_path }}
+          revision: HEAD:${{ inputs.openapi_path }}
+          fail-on: ERR
+          # Pas d'envoi des specs au service en ligne d'oasdiff.
+          review: false
+
+      - name: Cassant sans « ! » ?
+        if: steps.oasdiff.outcome == 'failure'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if printf '%s' "$PR_TITLE" | grep -Eq '^[a-z]+(\([^()]*\))?!:'; then
+            echo "::notice::oasdiff détecte un changement cassant, annoncé par « ! » : OK."
+          else
+            echo "::error::oasdiff détecte un changement cassant de l'API, mais le titre n'a pas de « ! » (voir les annotations de l'étape oasdiff)."
+            exit 1
+          fi
