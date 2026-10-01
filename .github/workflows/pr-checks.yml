@@ -80,6 +80,9 @@ jobs:
 
           # --- 2. Description -------------------------------------------------
           clean = re.sub(r"<!--.*?-->", "", body, flags=re.S)
+          # Tout ce qui suit une ligne « --- » (signature, pied ajouté par un bot)
+          # est hors modèle : on l'ignore.
+          clean = re.split(r"^-{3,}\s*$", clean, maxsplit=1, flags=re.M)[0]
           sections: dict[str, str] = {}
           for m in re.finditer(r"^##\s+(.+?)\s*$(.*?)(?=^##\s|\Z)", clean, flags=re.M | re.S):
               sections[m.group(1).strip().rstrip("?").strip().lower()] = m.group(2).strip()
