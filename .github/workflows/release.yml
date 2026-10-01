@@ -45,13 +45,15 @@ on:
         description: Redéployer une version existante (X.Y.Z) sans bump ni build — workflow_dispatch
         type: string
         default: ''
+      release_app_client_id:
+        description: Client ID de la GitHub App de release (pas un secret)
+        type: string
+        default: Iv23li1N00eylQ1llniH
       commitizen_version:
         description: Version de commitizen
         type: string
         default: 4.19.0
     secrets:
-      RELEASE_APP_ID:
-        required: true
       RELEASE_APP_PRIVATE_KEY:
         required: true
       PORTAINER_WEBHOOK_URL:
@@ -99,7 +101,7 @@ jobs:
         id: app
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
+          client-id: ${{ inputs.release_app_client_id }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - name: Checkout (branche à jour, historique complet)

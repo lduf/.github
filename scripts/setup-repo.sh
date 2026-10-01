@@ -8,7 +8,7 @@
 #   - rulesets « main » (PR obligatoire, squash, checks requis, pas de
 #     force-push) et « release-tags » (tags v* réservés au bot), avec la
 #     GitHub App de release comme seul acteur qui contourne ;
-#   - secrets RELEASE_APP_ID / RELEASE_APP_PRIVATE_KEY si --key est fourni.
+#   - secret RELEASE_APP_PRIVATE_KEY si --key est fourni.
 #
 # Prérequis : gh authentifié avec un compte admin du repo, jq. L'App doit
 # être installée sur le repo (le plus simple : installation « All
@@ -85,7 +85,6 @@ upsert_ruleset "$HERE/rulesets/release-tags.json"
 
 if [ -n "$KEY" ]; then
   echo "==> $REPO : secrets de la GitHub App"
-  gh secret set RELEASE_APP_ID --repo "$REPO" --body "$APP_ID"
   gh secret set RELEASE_APP_PRIVATE_KEY --repo "$REPO" < "$KEY"
 fi
 
