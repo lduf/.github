@@ -61,24 +61,21 @@ Dans le preset `cz_conventional_commits`, la `BUMP_MAP` par défaut fait passer
 contraire au point 4. La config commune utilise donc `cz_customize`, qui permet
 de redéfinir `bump_map`, `bump_map_major_version_zero`, `change_type_map`,
 `change_type_order`, `changelog_pattern` et `commit_parser` (vérifié dans le
-code source de commitizen). Esquisse, validée en Phase 2 dans le bac à sable :
+code source de commitizen).
 
-```toml
-[tool.commitizen]
-name = "cz_customize"
-tag_format = "v$version"
-version_provider = "uv"            # cargo | scm selon le langage
-major_version_zero = true
-update_changelog_on_bump = true
-bump_message = "chore(release): v$new_version"
+La config validée dans le bac à sable (Phase 2) est dans
+[`docs/release.md`](../release.md#config-commitizen-de-reference).
 
-[tool.commitizen.customize]
-bump_pattern = '^((BREAKING[\-\ ]CHANGE|feat|fix|perf)(\([^()]*\))?(!)?|\w+(\([^()]*\))?!):'
-bump_map = { '^.+!$' = "MAJOR", '^BREAKING[\-\ ]CHANGE' = "MAJOR", '^feat' = "MINOR", '^fix' = "PATCH", '^perf' = "PATCH" }
-bump_map_major_version_zero = { '^.+!$' = "MINOR", '^BREAKING[\-\ ]CHANGE' = "MINOR", '^feat' = "MINOR", '^fix' = "PATCH", '^perf' = "PATCH" }
-change_type_map = { feat = "Features", fix = "Fixes", perf = "Performance" }
-change_type_order = ["BREAKING CHANGE", "Features", "Fixes", "Performance"]
-```
+Deux constats des tests :
+
+- Le `!` du titre fait bien bumper, mais **ne range pas** l'entrée dans une
+  section *Breaking* (même le preset officiel ne le fait pas). La section
+  *Breaking* du CHANGELOG vient d'un **paragraphe** du corps du commit qui
+  commence par `BREAKING CHANGE:`. Avec le squash merge, le corps du commit
+  est la description de la PR : la section *Breaking ?* du modèle de PR porte
+  ce paragraphe, et `pr-checks` impose `!` ⇔ paragraphe.
+- Sans tag existant, le provider `scm` (Go) part de `0.0.0` : le premier
+  `feat` donne `v0.1.0`.
 
 Pour Rust et Go, la même config vit dans `.cz.toml`. Elle est générée par
 Copier et mise à jour par `copier update`.

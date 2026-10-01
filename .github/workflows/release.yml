@@ -1,0 +1,311 @@
+name: release
+
+# Release automatique après merge sur main (ADR 0003 et 0004, docs/release.md).
+#
+# 1. Calcule le bump avec commitizen (config dans pyproject.toml ou .cz.toml de
+#    l'app) depuis le dernier tag. Pas de commit qui bumpe => pas de release.
+# 2. Pousse directement sur main le commit « chore(release): vX.Y.Z » et le tag,
+#    avec le token de la GitHub App de release (seul acteur qui contourne le
+#    ruleset).
+# 3. Dans le même job (un push fait avec GITHUB_TOKEN ne déclenche aucun autre
+#    workflow) : build et push de l'image GHCR X.Y.Z, X.Y, sha-<court>.
+# 4. Déploie selon deploy_mode, sauf si une PR du lot porte le label no-deploy.
+#
+# Appel (dans le ci.yml de l'app) :
+#   release:
+#     if: github.event_name != 'pull_request'
+#     uses: lduf/.github/.github/workflows/release.yml@main
+#     permissions: { contents: read, packages: write, pull-requests: read }
+#     with: { redeploy_version: "${{ inputs.version }}" }
+#     secrets: inherit
+on:
+  workflow_call:
+    inputs:
+      deploy_mode:
+        description: portainer-webhook | oikos-pr | none
+        type: string
+        default: portainer-webhook
+      branch:
+        description: Branche de release
+        type: string
+        default: main
+      build_image:
+        description: Construire et pousser une image GHCR
+        type: boolean
+        default: true
+      context:
+        description: Contexte du build Docker
+        type: string
+        default: .
+      dockerfile:
+        description: Chemin du Dockerfile
+        type: string
+        default: Dockerfile
+      redeploy_version:
+        description: Redéployer une version existante (X.Y.Z) sans bump ni build — workflow_dispatch
+        type: string
+        default: ''
+      release_app_client_id:
+        description: Client ID de la GitHub App de release (par défaut, variable de repo RELEASE_APP_CLIENT_ID)
+        type: string
+        default: ''
+      commitizen_version:
+        description: Version de commitizen
+        type: string
+        default: 4.19.0
+    secrets:
+      RELEASE_APP_PRIVATE_KEY:
+        required: true
+      PORTAINER_WEBHOOK_URL:
+        required: false
+    outputs:
+      released:
+        description: "true si une nouvelle version a été publiée"
+        value: ${{ jobs.release.outputs.released }}
+      version:
+        description: Version publiée ou redéployée
+        value: ${{ jobs.release.outputs.version }}
+      deployed:
+        description: "true si l'étape de déploiement a été exécutée"
+        value: ${{ jobs.release.outputs.deployed }}
+
+jobs:
+  release:
+    # Anti-boucle : le commit du bot redéclenche « push: main », on l'ignore.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !startsWith(github.event.head_commit.message, 'chore(release):')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Merges rapprochés : les runs se suivent sans s'annuler ; un run en attente
+    # remplacé par un plus récent est sans perte, car chaque run relit main.
+    concurrency:
+      group: release-${{ github.repository }}
+      cancel-in-progress: false
+    outputs:
+      released: ${{ steps.bump.outputs.released }}
+      version: ${{ steps.bump.outputs.version || steps.redeploy.outputs.version }}
+      deployed: ${{ steps.deploy.outputs.deployed }}
+    env:
+      BRANCH: ${{ inputs.branch }}
+      DEPLOY_MODE: ${{ inputs.deploy_mode }}
+    steps:
+      - name: Vérifier la configuration
+        env:
+          CLIENT_ID: ${{ inputs.release_app_client_id || vars.RELEASE_APP_CLIENT_ID }}
+        run: |
+          if [ -z "$CLIENT_ID" ]; then
+            echo "::error::Variable de repo RELEASE_APP_CLIENT_ID absente : lancer scripts/setup-repo.sh (lduf/.github) sur ce repo."
+            exit 1
+          fi
+          case "$DEPLOY_MODE" in
+            portainer-webhook|oikos-pr|none) ;;
+            *) echo "::error::deploy_mode inconnu : $DEPLOY_MODE"; exit 1 ;;
+          esac
+
+      - name: Token de la GitHub App de release
+        id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ inputs.release_app_client_id || vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Checkout (branche à jour, historique complet)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Identité git du bot
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+        run: |
+          user_id=$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${user_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+
+      - name: Set up uv
+        if: inputs.redeploy_version == ''
+        uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Bump, CHANGELOG, commit et tag
+        id: bump
+        if: inputs.redeploy_version == ''
+        env:
+          CZ: uvx --from commitizen==${{ inputs.commitizen_version }} cz
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            # Toujours repartir de la branche distante à jour : un autre merge a
+            # pu arriver pendant l'attente du verrou de concurrence.
+            git fetch --force --tags origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+            prev_tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
+            before=$(git rev-parse HEAD)
+            # 3 = NO_COMMITS_FOUND (tout est déjà publié, ex. run suivant un lot regroupé),
+            # 21 = NO_COMMITS_TO_BUMP (rien qui justifie une release).
+            $CZ --no-raise 3,21 bump --yes
+            if [ "$(git rev-parse HEAD)" = "$before" ]; then
+              echo "::notice::Aucun commit feat/fix/perf/breaking depuis ${prev_tag:-le début} : pas de release."
+              echo "released=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            version=$($CZ version --project)
+            # Push atomique en fast-forward strict : refusé si la branche a bougé.
+            if git push --atomic origin "HEAD:refs/heads/$BRANCH" "refs/tags/v$version"; then
+              {
+                echo "released=true"
+                echo "version=$version"
+                echo "prev_tag=$prev_tag"
+                echo "sha=$(git rev-parse HEAD)"
+                echo "short_sha=$(git rev-parse --short=7 HEAD)"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::warning::Push refusé (tentative $attempt), la branche a bougé : nouveau calcul."
+            git tag -d "v$version"
+            sleep $((attempt * 5))
+          done
+          echo "::error::Impossible de pousser la release après 3 tentatives."
+          exit 1
+
+      - name: Redéploiement d'une version existante
+        id: redeploy
+        if: inputs.redeploy_version != ''
+        env:
+          VERSION: ${{ inputs.redeploy_version }}
+        run: |
+          set -euo pipefail
+          VERSION="${VERSION#v}"
+          git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null \
+            || { echo "::error::Tag v$VERSION introuvable."; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Label no-deploy dans le lot ?
+        id: lot
+        if: steps.bump.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREV_TAG: ${{ steps.bump.outputs.prev_tag }}
+        run: |
+          set -euo pipefail
+          # Commits du lot = depuis le tag précédent, sans le commit de release.
+          range="${PREV_TAG:+$PREV_TAG..}HEAD~1"
+          deploy=true
+          prs=""
+          for sha in $(git rev-list "$range"); do
+            pulls=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha/pulls" \
+                      --jq '.[] | [(.number|tostring), ([.labels[].name] | join(","))] | @tsv')
+            while IFS=$'\t' read -r number labels; do
+              [ -z "$number" ] && continue
+              prs="$prs #$number"
+              if printf '%s\n' "$labels" | tr ',' '\n' | grep -qx 'no-deploy'; then
+                echo "::notice::La PR #$number porte no-deploy : le lot n'est pas déployé."
+                deploy=false
+              fi
+            done <<< "$pulls"
+          done
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+          echo "prs=$prs" >> "$GITHUB_OUTPUT"
+
+      - name: Nom de l'image
+        id: image
+        if: inputs.build_image && (steps.bump.outputs.released == 'true' || steps.redeploy.outputs.version != '')
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Login GHCR
+        if: steps.image.outputs.name != ''
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Set up Buildx
+        if: steps.image.outputs.name != ''
+        uses: docker/setup-buildx-action@v4
+
+      - name: Tags et labels de l'image
+        id: meta
+        if: steps.image.outputs.name != '' && steps.bump.outputs.released == 'true'
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=v${{ steps.bump.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ steps.bump.outputs.version }}
+            type=raw,value=sha-${{ steps.bump.outputs.short_sha }}
+            type=raw,value=latest,enable=${{ inputs.deploy_mode == 'portainer-webhook' && steps.lot.outputs.deploy == 'true' }}
+
+      - name: Build et push
+        if: steps.meta.outcome == 'success'
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.bump.outputs.version }}
+            COMMIT=${{ steps.bump.outputs.sha }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Redéploiement — latest pointe sur la version demandée
+        if: steps.image.outputs.name != '' && steps.redeploy.outputs.version != '' && inputs.deploy_mode == 'portainer-webhook'
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          VERSION: ${{ steps.redeploy.outputs.version }}
+        run: docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE:$VERSION"
+
+      - name: Déploiement
+        id: deploy
+        if: steps.lot.outputs.deploy == 'true' || steps.redeploy.outputs.version != ''
+        env:
+          WEBHOOK: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          case "$DEPLOY_MODE" in
+            portainer-webhook)
+              if [ -z "$WEBHOOK" ]; then
+                echo "::warning::Secret PORTAINER_WEBHOOK_URL absent : déploiement simulé (latest a bien bougé)."
+              else
+                curl -fsS -X POST --retry 3 --max-time 30 "$WEBHOOK" >/dev/null
+              fi
+              echo "deployed=true" >> "$GITHUB_OUTPUT" ;;
+            oikos-pr)
+              echo "::warning::deploy_mode=oikos-pr pas encore implémenté (Oikos en construction) : rien n'est déployé."
+              echo "deployed=false" >> "$GITHUB_OUTPUT" ;;
+            none)
+              echo "deployed=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Résumé
+        if: always()
+        env:
+          RELEASED: ${{ steps.bump.outputs.released }}
+          VERSION: ${{ steps.bump.outputs.version || steps.redeploy.outputs.version }}
+          PREV_TAG: ${{ steps.bump.outputs.prev_tag }}
+          PRS: ${{ steps.lot.outputs.prs }}
+          LOT_DEPLOY: ${{ steps.lot.outputs.deploy }}
+          DEPLOYED: ${{ steps.deploy.outputs.deployed }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          {
+            echo "## Release"
+            if [ -n "$VERSION" ] && [ "$RELEASED" != "true" ]; then
+              echo "Redéploiement de **v$VERSION** (sans bump ni build)."
+            elif [ "$RELEASED" = "true" ]; then
+              echo "Version **v$VERSION** (précédente : ${PREV_TAG:-aucune}). PR du lot :${PRS:- aucune}."
+            else
+              echo "Pas de release : aucun commit feat/fix/perf/breaking depuis le dernier tag."
+            fi
+            [ -n "$TAGS" ] && { echo; echo "Image :"; echo '```'; echo "$TAGS"; echo '```'; }
+            [ "$LOT_DEPLOY" = "false" ] && echo "Label **no-deploy** dans le lot : déploiement sauté."
+            echo "Déploiement (\`$DEPLOY_MODE\`) : ${DEPLOYED:-non}."
+          } >> "$GITHUB_STEP_SUMMARY"
