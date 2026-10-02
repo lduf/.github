@@ -1,7 +1,7 @@
 name: ci-python
 
-# Qualité d'une app Python (ADR 0002) : exactement `just check`, puis build
-# de l'image (sans push). Check requis : « ci / check ».
+# Qualité d'une app Python (ADR 0002) : exactement `just check` ; build de
+# l'image (sans push) en parallèle. Check requis : « ci / check ».
 #
 #   ci:
 #     if: github.event_name == 'pull_request'
@@ -16,7 +16,8 @@ on:
         default: true
 
 jobs:
-  check:
+  just-check:
+    name: just check
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -27,13 +28,39 @@ jobs:
       - uses: extractions/setup-just@v4
       - name: just check
         run: just check
+
+  # En parallèle de `just check` : le build de l'image n'en dépend pas.
+  image:
+    if: inputs.build_image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
-        if: inputs.build_image
       - name: Build de l'image
-        if: inputs.build_image
         uses: docker/build-push-action@v7
         with:
           context: .
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Check requis « ci / check » : vert seulement si `just check` et l'image
+  # le sont (un job sauté compterait comme un succès pour GitHub).
+  check:
+    if: ${{ !cancelled() }}
+    needs: [just-check, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: just check et image
+        env:
+          CHECK: ${{ needs.just-check.result }}
+          IMAGE: ${{ needs.image.result }}
+          BUILD_IMAGE: ${{ inputs.build_image }}
+        run: |
+          expected=success; [ "$BUILD_IMAGE" = true ] || expected=skipped
+          if [ "$CHECK" != success ] || [ "$IMAGE" != "$expected" ]; then
+            echo "::error::just check : $CHECK, image : $IMAGE"
+            exit 1
+          fi
