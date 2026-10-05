@@ -118,7 +118,12 @@ if [ -n "$BASE_TAG" ]; then
   else
     BASE_REF=$(gh api "repos/$REPO/commits/$BASE_REF" --jq .sha)  # sha court ou branche -> sha complet
   fi
-  existing=$(gh api "repos/$REPO/git/ref/tags/$BASE_TAG" --jq .object.sha 2>/dev/null || true)
+  # Sur un 404, gh api écrit quand même le corps d'erreur sur stdout : tester
+  # l'existence d'abord, lire le sha ensuite.
+  existing=""
+  if gh api "repos/$REPO/git/ref/tags/$BASE_TAG" --silent 2>/dev/null; then
+    existing=$(gh api "repos/$REPO/git/ref/tags/$BASE_TAG" --jq .object.sha)
+  fi
   if [ -z "$existing" ]; then
     echo "==> $REPO : tag de base $BASE_TAG sur ${BASE_REF:0:7}"
     gh api -X POST "repos/$REPO/git/refs" --silent -f "ref=refs/tags/$BASE_TAG" -f "sha=$BASE_REF"
