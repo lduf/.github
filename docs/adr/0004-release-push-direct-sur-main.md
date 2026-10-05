@@ -42,7 +42,9 @@ Après chaque push sur `main`, le workflow réutilisable `release.yml` (dans
   - `portainer-webhook` : pousse `latest` et appelle le secret
     `PORTAINER_WEBHOOK_URL`.
   - `oikos-pr` : ouvre une PR sur `lduf/oikos` qui met à jour le tag et le
-    **digest** de l'image, et copie `observability/`. Pas de `latest`.
+    **digest** de l'image, et copie `observability/`. Pas de `latest`. La PR
+    est fusionnée automatiquement quand la CI d'Oikos est verte (ADR 0011
+    d'Oikos) : merger la PR de l'app suffit à déployer.
 - Label **`no-deploy`** sur une PR : la release a **quand même** lieu (version,
   CHANGELOG, tag, image `X.Y.Z`). Seule l'étape de déploiement est sautée.
   - Le workflow retrouve les PR d'origine des commits du lot

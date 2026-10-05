@@ -10,6 +10,9 @@ name: release
 # 3. Dans le même job (un push fait avec GITHUB_TOKEN ne déclenche aucun autre
 #    workflow) : build et push de l'image GHCR X.Y.Z, X.Y, sha-<court>.
 # 4. Déploie selon deploy_mode, sauf si une PR du lot porte le label no-deploy.
+#    oikos-pr : PR sur lduf/oikos produite par son platform/release/apply.py,
+#    fusionnée automatiquement dès que la CI d'Oikos est verte (ADR 0011
+#    d'Oikos) ; le merge déploie (doco-cd).
 #
 # Appel (dans le ci.yml de l'app) :
 #   release:
@@ -41,6 +44,14 @@ on:
         description: Chemin du Dockerfile
         type: string
         default: Dockerfile
+      stack:
+        description: "oikos-pr : dossier stacks/<stack> d'Oikos (par défaut, nom du repo)"
+        type: string
+        default: ''
+      oikos_repo:
+        description: "oikos-pr : nom du repo Oikos, chez le même propriétaire"
+        type: string
+        default: oikos
       redeploy_version:
         description: Redéployer une version existante (X.Y.Z) sans bump ni build — workflow_dispatch
         type: string
@@ -68,6 +79,9 @@ on:
       deployed:
         description: "true si l'étape de déploiement a été exécutée"
         value: ${{ jobs.release.outputs.deployed }}
+      oikos_pr:
+        description: "oikos-pr : URL de la PR de release sur Oikos"
+        value: ${{ jobs.release.outputs.oikos_pr }}
 
 jobs:
   release:
@@ -85,7 +99,8 @@ jobs:
     outputs:
       released: ${{ steps.bump.outputs.released }}
       version: ${{ steps.bump.outputs.version || steps.redeploy.outputs.version }}
-      deployed: ${{ steps.deploy.outputs.deployed }}
+      deployed: ${{ steps.deploy.outputs.deployed || steps.oikos.outputs.deployed }}
+      oikos_pr: ${{ steps.oikos.outputs.pr }}
     env:
       BRANCH: ${{ inputs.branch }}
       DEPLOY_MODE: ${{ inputs.deploy_mode }}
@@ -93,6 +108,7 @@ jobs:
       - name: Vérifier la configuration
         env:
           CLIENT_ID: ${{ inputs.release_app_client_id || vars.RELEASE_APP_CLIENT_ID }}
+          BUILD_IMAGE: ${{ inputs.build_image }}
         run: |
           if [ -z "$CLIENT_ID" ]; then
             echo "::error::Variable de repo RELEASE_APP_CLIENT_ID absente : lancer scripts/setup-repo.sh (lduf/.github) sur ce repo."
@@ -102,6 +118,10 @@ jobs:
             portainer-webhook|oikos-pr|none) ;;
             *) echo "::error::deploy_mode inconnu : $DEPLOY_MODE"; exit 1 ;;
           esac
+          if [ "$DEPLOY_MODE" = oikos-pr ] && [ "$BUILD_IMAGE" != true ]; then
+            echo "::error::deploy_mode=oikos-pr déploie une image : build_image doit rester à true."
+            exit 1
+          fi
 
       - name: Token de la GitHub App de release
         id: app
@@ -241,6 +261,7 @@ jobs:
             type=raw,value=latest,enable=${{ inputs.deploy_mode == 'portainer-webhook' && steps.lot.outputs.deploy == 'true' }}
 
       - name: Build et push
+        id: build
         if: steps.meta.outcome == 'success'
         uses: docker/build-push-action@v7
         with:
@@ -265,7 +286,7 @@ jobs:
 
       - name: Déploiement
         id: deploy
-        if: steps.lot.outputs.deploy == 'true' || steps.redeploy.outputs.version != ''
+        if: (steps.lot.outputs.deploy == 'true' || steps.redeploy.outputs.version != '') && inputs.deploy_mode != 'oikos-pr'
         env:
           WEBHOOK: ${{ secrets.PORTAINER_WEBHOOK_URL }}
         run: |
@@ -278,12 +299,113 @@ jobs:
                 curl -fsS -X POST --retry 3 --max-time 30 "$WEBHOOK" >/dev/null
               fi
               echo "deployed=true" >> "$GITHUB_OUTPUT" ;;
-            oikos-pr)
-              echo "::warning::deploy_mode=oikos-pr pas encore implémenté (Oikos en construction) : rien n'est déployé."
-              echo "deployed=false" >> "$GITHUB_OUTPUT" ;;
             none)
               echo "deployed=false" >> "$GITHUB_OUTPUT" ;;
           esac
+
+      # --- oikos-pr : PR de release sur Oikos, fusionnée automatiquement -----
+      # Format de la PR : platform/release/apply.py d'Oikos (ADR 0009 d'Oikos).
+      # Fusion : auto-merge dès que les checks requis d'Oikos passent, sans
+      # revue humaine (ADR 0011 d'Oikos). Le merge déploie (doco-cd).
+      - name: Oikos — token de la GitHub App de release
+        id: oikos_app
+        if: inputs.deploy_mode == 'oikos-pr' && (steps.lot.outputs.deploy == 'true' || steps.redeploy.outputs.version != '')
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ inputs.release_app_client_id || vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ inputs.oikos_repo }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Oikos — checkout
+        if: steps.oikos_app.outcome == 'success'
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/${{ inputs.oikos_repo }}
+          path: .oikos
+          token: ${{ steps.oikos_app.outputs.token }}
+
+      - name: Oikos — set up uv
+        if: steps.oikos_app.outcome == 'success'
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          working-directory: .oikos
+
+      - name: Oikos — PR de release
+        id: oikos
+        if: steps.oikos_app.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.oikos_app.outputs.token }}
+          OIKOS: ${{ github.repository_owner }}/${{ inputs.oikos_repo }}
+          STACK: ${{ inputs.stack }}
+          IMAGE: ${{ steps.image.outputs.name }}
+          VERSION: ${{ steps.bump.outputs.version || steps.redeploy.outputs.version }}
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+          REDEPLOY: ${{ steps.redeploy.outputs.version }}
+        run: |
+          set -euo pipefail
+          app="${GITHUB_REPOSITORY#*/}"
+          stack="${STACK:-$app}"
+          if [ -n "$REDEPLOY" ]; then
+            # Version existante : observability/ et sha du tag, digest du registre.
+            git checkout -q "v$VERSION"
+            digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          else
+            digest="$BUILD_DIGEST"
+          fi
+          [ -n "$digest" ] || { echo "::error::Digest de $IMAGE:$VERSION introuvable."; exit 1; }
+          source="$GITHUB_REPOSITORY@$(git rev-parse --short=7 HEAD)"
+
+          cd .oikos
+          out="$RUNNER_TEMP/oikos-release.env"
+          : > "$out"
+          uv run --frozen platform/release/apply.py --stack "$stack" --app "$app" --image "$IMAGE" \
+            --version "$VERSION" --digest "$digest" --observability "$GITHUB_WORKSPACE/observability" \
+            --source "$source" --github-output "$out"
+          changed=$(sed -n 's/^changed=//p' "$out")
+          branch=$(sed -n 's/^branch=//p' "$out")
+          title=$(sed -n 's/^title=//p' "$out")
+          body_file="$RUNNER_TEMP/oikos-release-body.md"
+          awk '/^body<</ { d = substr($0, 7); f = 1; next } f && $0 == d { f = 0 } f' "$out" > "$body_file"
+          if [ "$changed" != true ]; then
+            echo "::notice::$IMAGE:$VERSION déjà en place dans Oikos : pas de PR."
+            echo "deployed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "$(git -C "$GITHUB_WORKSPACE" config user.name)"
+          git config user.email "$(git -C "$GITHUB_WORKSPACE" config user.email)"
+          git switch -q -c "$branch"
+          git add -A
+          git commit -q -m "$title" -m "$(cat "$body_file")"
+          git push -q --force origin "HEAD:refs/heads/$branch"
+
+          pr=$(gh pr list -R "$OIKOS" --head "$branch" --state open --json url --jq '.[0].url // ""')
+          if [ -z "$pr" ]; then
+            pr=$(gh pr create -R "$OIKOS" --base main --head "$branch" --title "$title" --body-file "$body_file")
+          fi
+
+          # Une release plus récente remplace les PR de release encore ouvertes de la même app.
+          gh pr list -R "$OIKOS" --state open --json number,headRefName \
+              --jq ".[] | select(.headRefName | startswith(\"release/$app-\")) | select(.headRefName != \"$branch\") | .number" \
+            | while read -r old; do
+                gh pr close -R "$OIKOS" "$old" --delete-branch --comment "Remplacée par $pr."
+              done
+
+          # Méthode de merge autorisée par Oikos, squash de préférence.
+          method=$(gh repo view "$OIKOS" --json squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed \
+            --jq 'if .squashMergeAllowed then "squash" elif .mergeCommitAllowed then "merge" else "rebase" end')
+          if ! gh pr merge -R "$OIKOS" "$pr" --auto "--$method"; then
+            echo "::error::Auto-merge refusé sur $pr : activer « Allow auto-merge » sur $OIKOS (docs/deploiement.md §11.1 d'Oikos). La PR reste ouverte : la fusionner à la main déploie."
+            exit 1
+          fi
+          echo "::notice::PR de release : $pr (fusion automatique quand la CI d'Oikos est verte)."
+          {
+            echo "deployed=true"
+            echo "pr=$pr"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Résumé
         if: always()
@@ -293,7 +415,8 @@ jobs:
           PREV_TAG: ${{ steps.bump.outputs.prev_tag }}
           PRS: ${{ steps.lot.outputs.prs }}
           LOT_DEPLOY: ${{ steps.lot.outputs.deploy }}
-          DEPLOYED: ${{ steps.deploy.outputs.deployed }}
+          DEPLOYED: ${{ steps.deploy.outputs.deployed || steps.oikos.outputs.deployed }}
+          OIKOS_PR: ${{ steps.oikos.outputs.pr }}
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           {
@@ -308,4 +431,5 @@ jobs:
             [ -n "$TAGS" ] && { echo; echo "Image :"; echo '```'; echo "$TAGS"; echo '```'; }
             [ "$LOT_DEPLOY" = "false" ] && echo "Label **no-deploy** dans le lot : déploiement sauté."
             echo "Déploiement (\`$DEPLOY_MODE\`) : ${DEPLOYED:-non}."
+            if [ -n "$OIKOS_PR" ]; then echo "PR Oikos (fusion automatique si CI verte) : $OIKOS_PR"; fi
           } >> "$GITHUB_STEP_SUMMARY"
