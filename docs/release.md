@@ -124,10 +124,20 @@ ou revert de la PR sur Oikos.
 
 ## Mettre en place un repo
 
+Sans rien cloner : workflow **`setup-repo`** de `lduf/.github` (Actions → setup-repo → Run
+workflow, `gh workflow run setup-repo.yml -R lduf/.github -f repo=mon-app`, ou un agent via
+l'API `workflow_dispatch`). Il tourne avec le token de l'App de release.
+
 ```bash
-# une fois par repo, depuis un clone de lduf/.github (gh connecté en admin)
+# variante locale, depuis un clone de lduf/.github (gh connecté en admin)
 scripts/setup-repo.sh lduf/mon-app --key ~/chemin/release-bot.pem
 ```
+
+**Migration d'un repo qui a déjà des versions** : ajouter `base_tag=vX.Y.Z` (dernière
+version publiée) et `base_ref=<sha>` (commit qui la porte, défaut : tête de la branche par
+défaut). Sans ce tag, commitizen ne connaît aucune version et la première release repartirait
+de `0.1.0`/`1.0.0`. Le tag est posé par l'App (les humains ne peuvent pas pousser de `v*`) ;
+rien n'est fait s'il existe déjà au même commit, erreur s'il existe ailleurs.
 
 Les checks requis par défaut sont `pr-checks / checks` et `ci / check`. Le
 script règle le merge (squash, titre et description de la PR), crée le

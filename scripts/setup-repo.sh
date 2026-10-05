@@ -9,7 +9,11 @@
 #     force-push) et « release-tags » (tags v* réservés au bot), avec la
 #     GitHub App de release comme seul acteur qui contourne ;
 #   - variable RELEASE_APP_CLIENT_ID (identifiant public de l'App) et, si --key
-#     est fourni, secret RELEASE_APP_PRIVATE_KEY.
+#     est fourni, secret RELEASE_APP_PRIVATE_KEY ;
+#   - avec --base-tag, tag de base vX.Y.Z (migration d'un repo qui a déjà des
+#     versions : commitizen repart de ce tag au lieu de 0.1.0). Posé sur
+#     --base-ref (sha, défaut : tête de la branche par défaut) ; rien si le tag
+#     existe déjà au même commit, erreur s'il existe ailleurs.
 #
 # Prérequis : gh authentifié avec un compte admin du repo, jq. L'App doit
 # être installée sur le repo (le plus simple : installation « All
@@ -18,6 +22,7 @@
 # Usage :
 #   scripts/setup-repo.sh lduf/mon-app [--key ~/release-bot.pem]
 #                         [--check "pr-checks / checks"]...  (défaut : pr-checks / checks + ci / check)
+#                         [--base-tag v1.13.0 [--base-ref <sha>]]
 #
 # Identité de la GitHub App de release : variables d'environnement
 # RELEASE_APP_ID (ID numérique, pour le bypass des rulesets) et
@@ -28,10 +33,12 @@ set -euo pipefail
 APP_ID="${RELEASE_APP_ID:-5153118}"
 CLIENT_ID="${RELEASE_APP_CLIENT_ID:-Iv23li1N00eylQ1llniH}"
 KEY=""
+BASE_TAG=""
+BASE_REF=""
 CHECKS=()
 REPO=""
 
-usage() { sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -39,6 +46,8 @@ while [ $# -gt 0 ]; do
     --check) CHECKS+=("$2"); shift 2 ;;
     --app-id) APP_ID="$2"; shift 2 ;;
     --client-id) CLIENT_ID="$2"; shift 2 ;;
+    --base-tag) BASE_TAG="$2"; shift 2 ;;
+    --base-ref) BASE_REF="$2"; shift 2 ;;
     -h|--help) usage ;;
     -*) echo "Option inconnue : $1" >&2; usage 1 ;;
     *) REPO="$1"; shift ;;
@@ -46,6 +55,9 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$REPO" ] || usage 1
 [ ${#CHECKS[@]} -gt 0 ] || CHECKS=("pr-checks / checks" "ci / check")
+if [ -n "$BASE_TAG" ] && ! [[ "$BASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "--base-tag attendu au format vX.Y.Z : $BASE_TAG" >&2; exit 1
+fi
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 GITHUB_ACTIONS_APP_ID=15368  # les checks requis doivent venir de GitHub Actions
@@ -97,6 +109,25 @@ gh variable set RELEASE_APP_CLIENT_ID --repo "$REPO" --body "$CLIENT_ID"
 if [ -n "$KEY" ]; then
   echo "==> $REPO : clé privée de la GitHub App"
   gh secret set RELEASE_APP_PRIVATE_KEY --repo "$REPO" < "$KEY"
+fi
+
+if [ -n "$BASE_TAG" ]; then
+  if [ -z "$BASE_REF" ]; then
+    branch=$(gh api "repos/$REPO" --jq .default_branch)
+    BASE_REF=$(gh api "repos/$REPO/commits/$branch" --jq .sha)
+  else
+    BASE_REF=$(gh api "repos/$REPO/commits/$BASE_REF" --jq .sha)  # sha court ou branche -> sha complet
+  fi
+  existing=$(gh api "repos/$REPO/git/ref/tags/$BASE_TAG" --jq .object.sha 2>/dev/null || true)
+  if [ -z "$existing" ]; then
+    echo "==> $REPO : tag de base $BASE_TAG sur ${BASE_REF:0:7}"
+    gh api -X POST "repos/$REPO/git/refs" --silent -f "ref=refs/tags/$BASE_TAG" -f "sha=$BASE_REF"
+  elif [ "$existing" = "$BASE_REF" ]; then
+    echo "==> $REPO : tag $BASE_TAG déjà en place"
+  else
+    echo "Tag $BASE_TAG déjà présent sur ${existing:0:7}, pas sur ${BASE_REF:0:7} : rien n'est modifié." >&2
+    exit 1
+  fi
 fi
 
 echo "OK. Vérifier que l'App de release est installée sur $REPO."
