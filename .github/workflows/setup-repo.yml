@@ -3,6 +3,8 @@ name: setup-repo
 # Configure un repo d'app (scripts/setup-repo.sh) avec le token de l'App de
 # release, et recopie sa clé privée dans le repo cible.
 #   gh workflow run setup-repo.yml -R lduf/.github -f repo=mon-app
+# Migration d'un repo qui a déjà des versions : -f base_tag=v1.13.0 [-f base_ref=<sha>]
+# (sans clone : aussi déclenchable par un agent via l'API, workflow_dispatch).
 on:
   workflow_dispatch:
     inputs:
@@ -14,6 +16,14 @@ on:
         description: Checks requis sur main, séparés par des virgules
         type: string
         default: "pr-checks / checks,ci / check"
+      base_tag:
+        description: "Migration : tag de base vX.Y.Z (dernière version publiée), vide sinon"
+        type: string
+        default: ""
+      base_ref:
+        description: "Migration : commit du tag de base (sha) ; vide = tête de la branche par défaut"
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -39,6 +49,8 @@ jobs:
           REPO: ${{ github.repository_owner }}/${{ inputs.repo }}
           CHECKS: ${{ inputs.checks }}
           KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          BASE_TAG: ${{ inputs.base_tag }}
+          BASE_REF: ${{ inputs.base_ref }}
         run: |
           key_file="$RUNNER_TEMP/release-app.pem"
           printf '%s\n' "$KEY" > "$key_file"
@@ -48,5 +60,7 @@ jobs:
             c="$(sed 's/^ *//; s/ *$//' <<<"$c")"
             [ -n "$c" ] && args+=(--check "$c")
           done
+          [ -n "$BASE_TAG" ] && args+=(--base-tag "$BASE_TAG")
+          [ -n "$BASE_REF" ] && args+=(--base-ref "$BASE_REF")
           scripts/setup-repo.sh "$REPO" --key "$key_file" "${args[@]}"
           rm -f "$key_file"
