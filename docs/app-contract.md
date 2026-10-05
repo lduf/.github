@@ -90,6 +90,13 @@ Règles :
 - `/healthz`, `/readyz` et `/metrics` ne sont pas comptés.
 - Les métriques du runtime (`process_*`, `go_*`, `python_*`) **PEUVENT** être
   exposées. Les métriques métier **DEVRAIENT** être préfixées par `<app>_`.
+- Une app **générée par Ktisis** (`lduf/ktisis`) expose en plus
+  `ktisis_info` (gauge, valeur `1`), labels `template_version` (le `_commit`
+  de son `.copier-answers.yml`, ex. `v0.9.0`), `contract` (`v1`), `lang`,
+  `auth` et `db` (`true`/`false`). Écrite par Copier, mise à jour par
+  `copier update` ; elle sert au suivi d'adoption et de retard de template.
+  Une app hors Ktisis **NE DOIT PAS** l'exposer (`ktisis check` la signale
+  sans échouer).
 
 ## 3. Logs
 
