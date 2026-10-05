@@ -2,7 +2,7 @@
 
 Paramètres et références communs à tous les repos `lduf` : modèles d'issues et
 de PR, et socle commun des apps générées depuis
-[`lduf/project_template`](https://github.com/lduf/project_template).
+[`lduf/ktisis`](https://github.com/lduf/ktisis).
 
 ## Sommaire
 
@@ -26,4 +26,4 @@ de PR, et socle commun des apps générées depuis
   défaut de l'organisation.
 
 Les apps sont générées par le template Copier
-[`lduf/project_template`](https://github.com/lduf/project_template).
+[`lduf/ktisis`](https://github.com/lduf/ktisis).
