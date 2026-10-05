@@ -1,6 +1,6 @@
 # Contrat d'app — `contract: v1`
 
-Référence commune de toutes les apps générées depuis `lduf/project_template`,
+Référence commune de toutes les apps générées depuis `lduf/ktisis`,
 quel que soit leur langage (Python, Go, Rust). Oikos (déploiement GitOps) et
 Iaso (tri des erreurs depuis Loki) s'appuient sur ce contrat : une app qui le
 respecte se déploie, se supervise et se diagnostique sans configuration

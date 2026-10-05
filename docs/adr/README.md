@@ -1,7 +1,7 @@
 # Décisions d'architecture (ADR)
 
 Décisions structurantes communes à toutes les apps générées depuis
-`lduf/project_template`. Une ADR est courte et datée. Elle ne se modifie pas
+`lduf/ktisis`. Une ADR est courte et datée. Elle ne se modifie pas
 après acceptation : une décision qui change fait l'objet d'une nouvelle ADR,
 qui *remplace* l'ancienne (statut mis à jour dans les deux).
 
