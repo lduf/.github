@@ -95,8 +95,32 @@ dépend de l'input `deploy_mode` :
 | `deploy_mode` | Effet |
 |---|---|
 | `portainer-webhook` (défaut, transition) | pousse aussi `latest`, puis appelle le secret `PORTAINER_WEBHOOK_URL` |
-| `oikos-pr` | ouvre une PR sur `lduf/oikos` (pas encore implémenté) |
+| `oikos-pr` | ouvre une PR de release sur `lduf/oikos` et active son **auto-merge** : elle est fusionnée dès que la CI d'Oikos est verte, sans revue, et le merge déploie (doco-cd). Pas de `latest` |
 | `none` | rien |
+
+### `oikos-pr` en détail
+
+Décisions : ADR 0009 (format) et ADR 0011 (auto-merge) d'Oikos.
+
+1. Checkout de `lduf/oikos` avec un token de l'App de release limité à ce
+   repo (`contents: write`, `pull-requests: write`).
+2. `platform/release/apply.py` d'Oikos écrit la ligne `image:`
+   (`X.Y.Z@sha256:<digest>`) de `stacks/<stack>/compose.yml`, et copie
+   `observability/` (alertes, leurs tests, dashboard). Il refuse si un point
+   manque : le run échoue, rien n'est poussé.
+3. Branche `release/<app>-X.Y.Z`, PR, puis `gh pr merge --auto`. Une PR de
+   release plus ancienne de la même app encore ouverte est fermée (remplacée).
+4. La CI d'Oikos (`validate`) passe → GitHub fusionne → doco-cd déploie.
+   CI rouge → la PR reste ouverte, rien n'est déployé : corriger, ou fermer la
+   PR.
+
+Inputs : `stack` (dossier `stacks/<stack>` d'Oikos, par défaut le nom du repo,
+ex. `stack: aether_run` pour `aether_run_api`) et `oikos_repo` (défaut
+`oikos`). Redéploiement d'une version (`workflow_dispatch`) : même chemin,
+avec le digest lu dans le registre et `observability/` du tag.
+
+Revenir en arrière : redéployer la version précédente (`workflow_dispatch`),
+ou revert de la PR sur Oikos.
 
 ## Mettre en place un repo
 
@@ -140,6 +164,10 @@ jobs:
     with: { redeploy_version: "${{ inputs.version }}" }
     secrets: inherit
 ```
+
+Sur Oikos : `with: { deploy_mode: oikos-pr, redeploy_version: "${{ inputs.version }}" }`
+(+ `stack:` si le dossier d'Oikos ne porte pas le nom du repo). L'App de
+release doit être installée sur `lduf/oikos` avec `pull-requests: write`.
 
 ## Config commitizen de référence
 
