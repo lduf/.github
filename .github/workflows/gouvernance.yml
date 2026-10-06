@@ -1,0 +1,71 @@
+name: gouvernance
+
+# Réconciliation du standard Ktisis (docs/gouvernance.md, ADR 0007) : chaque
+# semaine, rejoue scripts/setup-repo.sh sur tous les repos qui portent le
+# topic « ktisis » (posé par setup-repo). Le script est idempotent : un repo
+# conforme ne change pas, un réglage modifié à la main revient au standard.
+# Les checks requis propres à chaque repo sont conservés (lus dans son ruleset
+# « main »). Un repo en échec fait échouer le run : GitHub prévient par e-mail.
+#   gh workflow run gouvernance.yml -R lduf/.github [-f repo=mon-app]
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: Un seul repo (sans « lduf/ ») ; vide = tous les repos ktisis
+        type: string
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: gouvernance
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Sans « repositories » : token valable sur tous les repos où l'App est
+      # installée (installation « All repositories »).
+      - id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID || 'Iv23li1N00eylQ1llniH' }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Réconcilie les repos
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          ONLY: ${{ inputs.repo }}
+        run: |
+          if [ -n "$ONLY" ]; then
+            repos=("$OWNER/$ONLY")
+          else
+            mapfile -t repos < <(gh api --paginate installation/repositories \
+              --jq '.repositories[] | select(.archived | not) | select(.topics | index("ktisis")) | .full_name')
+          fi
+          echo "## Gouvernance : ${#repos[@]} repo(s)" >> "$GITHUB_STEP_SUMMARY"
+          failed=()
+          for repo in "${repos[@]}"; do
+            echo "::group::$repo"
+            if scripts/setup-repo.sh "$repo"; then
+              echo "- ✅ $repo" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- ❌ $repo" >> "$GITHUB_STEP_SUMMARY"
+              failed+=("$repo")
+            fi
+            echo "::endgroup::"
+          done
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "::error::Échec sur : ${failed[*]}"
+            exit 1
+          fi
