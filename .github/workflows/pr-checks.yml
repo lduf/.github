@@ -6,6 +6,7 @@ name: pr-checks
 #      « ! » dans le titre <=> paragraphe « BREAKING CHANGE: » ;
 #   3. CHANGELOG.md non modifié ;
 #   4. champ de version non modifié (le bot de release s'en charge) ;
+#   4b. aucun secret dans les commits de la PR (gitleaks) ;
 #   5. OpenAPI (optionnel) : un changement cassant détecté par oasdiff sans
 #      « ! » fait échouer la CI ;
 #   6. avertissements (non bloquants) : migration ajoutée ou variable
@@ -58,7 +59,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Les repos privés d'un compte perso n'ont pas le secret scanning de
+      # GitHub : gitleaks le remplace, sur les seuls commits de la PR. Faux
+      # positif : l'empreinte dans .gitleaksignore (ou règle dans .gitleaks.toml).
+      - name: Secrets dans les commits (gitleaks)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git --no-banner --redact --verbose --log-opts="${BASE_SHA}..${HEAD_SHA}" .
+
       - name: Description, CHANGELOG et version
+        if: ${{ !cancelled() }}
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
@@ -188,7 +201,7 @@ jobs:
       # --- 5. OpenAPI (optionnel) ---------------------------------------------
       - name: Spec OpenAPI présente sur la base ?
         id: oas
-        if: inputs.openapi_path != ''
+        if: ${{ !cancelled() && inputs.openapi_path != '' }}
         env:
           SPEC: ${{ inputs.openapi_path }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -201,7 +214,7 @@ jobs:
 
       - name: oasdiff (changements cassants)
         id: oasdiff
-        if: steps.oas.outputs.compare == 'true'
+        if: ${{ !cancelled() && steps.oas.outputs.compare == 'true' }}
         continue-on-error: true
         uses: oasdiff/oasdiff-action/breaking@v0.1.18
         with:
@@ -212,7 +225,7 @@ jobs:
           review: false
 
       - name: Cassant sans « ! » ?
-        if: steps.oasdiff.outcome == 'failure'
+        if: ${{ !cancelled() && steps.oasdiff.outcome == 'failure' }}
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |

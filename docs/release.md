@@ -139,11 +139,16 @@ défaut). Sans ce tag, commitizen ne connaît aucune version et la première rel
 de `0.1.0`/`1.0.0`. Le tag est posé par l'App (les humains ne peuvent pas pousser de `v*`) ;
 rien n'est fait s'il existe déjà au même commit, erreur s'il existe ailleurs.
 
-Les checks requis par défaut sont `pr-checks / checks` et `ci / check`. Le
-script règle le merge (squash, titre et description de la PR), crée le
-label `no-deploy`, crée ou met à jour les rulesets `main` et `release-tags`
-(seule l'App de release les contourne) et pose l'identité de l'App : variable `RELEASE_APP_CLIENT_ID` et secret `RELEASE_APP_PRIVATE_KEY`. Il est
-idempotent. L'App doit être installée sur le repo : le plus simple est une
+Les checks requis sont ceux passés en option, sinon ceux du ruleset `main`
+existant (une relance ne les écrase pas), sinon `pr-checks / checks` et
+`ci / check`. Le script applique le [standard Ktisis](gouvernance.md) :
+réglages de merge et d'Actions, alertes Dependabot, label `no-deploy`,
+rulesets `main`, `branch-names`, `linear-history` et `release-tags` (seule
+l'App de release les contourne), Pages par Actions si le repo a un
+`pages.yml`, topic `ktisis`. Il pose aussi l'identité de l'App : variable
+`RELEASE_APP_CLIENT_ID` et secret `RELEASE_APP_PRIVATE_KEY`. Il est
+idempotent : le relancer remet au standard un repo qui a dérivé. Pour Pages,
+l'App doit avoir la permission *Pages: read and write*. L'App doit être installée sur le repo : le plus simple est une
 installation « All repositories ».
 
 Le `ci.yml` de l'app :

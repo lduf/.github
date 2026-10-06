@@ -13,6 +13,7 @@ qui *remplace* l'ancienne (statut mis à jour dans les deux).
 | [0004](0004-release-push-direct-sur-main.md) | Release poussée directement sur `main` par la CI, sans PR de release | Acceptée |
 | [0005](0005-rust-langage-de-premier-rang.md) | Rust, langage de premier rang à côté de Python et Go | Acceptée |
 | [0006](0006-contrat-app-commun.md) | Un contrat d'app unique pour les trois langages | Acceptée |
+| [0007](0007-standard-ktisis-gouvernance-des-repos.md) | Standard Ktisis : règles de repo appliquées par `setup-repo`, vérifiées par `ktisis audit` | Acceptée |
 
 ## Modèle
 

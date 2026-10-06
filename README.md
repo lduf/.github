@@ -12,6 +12,8 @@ de PR, et socle commun des apps générées depuis
 - [Décisions d'architecture (ADR)](docs/adr/README.md) : Copier, just,
   commitizen, release poussée directement sur `main`, Rust au premier rang,
   contrat commun.
+- [Standard Ktisis — gouvernance des repos](docs/gouvernance.md) : branches,
+  rebase, merge, secrets, Pages ; chaque règle et ce qui la fait respecter.
 - [Release et contrôles de PR](docs/release.md) : quel titre donne quelle
   release, changement cassant, `no-deploy`, mise en place d'un repo.
 - Workflows réutilisables : [`pr-checks.yml`](.github/workflows/pr-checks.yml),
@@ -21,7 +23,7 @@ de PR, et socle commun des apps générées depuis
 - [Dashboard Grafana générique](observability/app-generic-dashboard.json)
   (variable `$app`) : vues HTTP communes à toutes les apps.
 - [`scripts/setup-repo.sh`](scripts/setup-repo.sh) et [`rulesets/`](rulesets/) :
-  réglages de merge, label et rulesets d'un repo en une commande.
+  applique le standard à un repo en une commande (réglages, rulesets, Pages).
 - `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` : modèles par
   défaut de l'organisation.
 

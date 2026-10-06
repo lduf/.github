@@ -13,9 +13,9 @@ on:
         required: true
         type: string
       checks:
-        description: Checks requis sur main, séparés par des virgules
+        description: "Checks requis sur main, séparés par des virgules ; vide = ceux du ruleset existant, sinon pr-checks / checks,ci / check"
         type: string
-        default: "pr-checks / checks,ci / check"
+        default: ""
       base_tag:
         description: "Migration : tag de base vX.Y.Z (dernière version publiée), vide sinon"
         type: string
