@@ -7,6 +7,8 @@ name: pr-checks
 #   3. CHANGELOG.md non modifié ;
 #   4. champ de version non modifié (le bot de release s'en charge) ;
 #   4b. aucun secret dans les commits de la PR (gitleaks) ;
+#   4c. ni commit de merge (mise à jour par rebase) ni marqueur de conflit
+#       dans les fichiers modifiés ;
 #   5. OpenAPI (optionnel) : un changement cassant détecté par oasdiff sans
 #      « ! » fait échouer la CI ;
 #   6. avertissements (non bloquants) : migration ajoutée ou variable
@@ -148,6 +150,27 @@ jobs:
           ).stdout.split()
           if "CHANGELOG.md" in changed:
               err("CHANGELOG.md est modifié : il est généré par le bot de release, ne pas y toucher.")
+
+          # --- 3b. Historique et conflits ------------------------------------
+          # Pas de commit de merge dans la PR : on se met à jour par rebase
+          # (docs/gouvernance.md). Vérifié sur les seuls commits de la PR, pas
+          # sur l'historique de main.
+          merges = subprocess.run(["git", "rev-list", "--merges", f"{base}..{head}"],
+                                  check=True, capture_output=True, text=True).stdout.split()
+          if merges:
+              err(f"La PR contient {len(merges)} commit(s) de merge ({', '.join(m[:7] for m in merges)}) : "
+                  "se mettre à jour par rebase (git rebase origin/main, puis git push --force-with-lease, "
+                  "ou « Update with rebase » sur GitHub).")
+          # Marqueurs de conflit laissés dans un fichier modifié (ex. PR copier update).
+          touched = subprocess.run(["git", "diff", "--name-only", "--diff-filter=AM", f"{base}...{head}"],
+                                   check=True, capture_output=True, text=True).stdout.split()
+          marker = re.compile(r"^(<{7}|>{7})( |$)", re.M)
+          for path in touched:
+              blob = subprocess.run(["git", "show", f"{head}:{path}"], capture_output=True)
+              if blob.returncode != 0 or b"\0" in blob.stdout[:8000]:
+                  continue
+              if marker.search(blob.stdout.decode("utf-8", "replace")):
+                  err(f"{path} contient des marqueurs de conflit (<<<<<<< / >>>>>>>) : résoudre le conflit.")
 
           # --- 4. Champ de version --------------------------------------------
           # Comparer au point de divergence (merge-base) et non à la base actuelle :
