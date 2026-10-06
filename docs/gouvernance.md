@@ -154,6 +154,31 @@ branche `gh-pages`. `setup-repo` l'active si le repo a
 > repo est privé (Pages privé : organisation en Enterprise Cloud). Ne rien
 > publier dans `docs/` qui ne puisse être lu par tous.
 
+## README et licence des apps
+
+Chaque app Ktisis a le même en-tête de README (généré par le template) :
+
+| Ligne | Contenu | Mis à jour par |
+|---|---|---|
+| CI | badge du workflow `ci` | GitHub |
+| Version | dernière version publiée, CHANGELOG, releases | la release (`release.yml`), entre les balises `<!-- ktisis:version -->` |
+| Ktisis | version du template, contrat d'app, ce standard | `copier update` (PR de mise à jour du template) |
+| Stack | langage, PostgreSQL, mode d'auth | `copier update` |
+| Prod | domaine, image GHCR | `copier update` |
+| Docs | site GitHub Pages | `copier update` |
+| Licence | licence du code | `copier update` |
+
+Le reste du README appartient à l'app. Ne pas modifier le tableau à la
+main : la release et `copier update` le réécrivent.
+
+Licence par défaut : **PolyForm Noncommercial 1.0.0**. Le code est lisible,
+modifiable et redistribuable pour tout usage non commercial (personnel,
+recherche, enseignement, associations, organismes publics) ; l'usage
+commercial, par ou pour une entreprise, est interdit sans accord écrit. Ce
+n'est pas une licence open source au sens de l'OSI. Alternatives au
+moment de la création (`ktisis new --license`) : `AGPL-3.0-only` (open
+source, copyleft fort), `MIT`, `none` (tous droits réservés).
+
 ## Hygiène du repo
 
 - Wiki et Projects désactivés : la doc vit dans `docs/` (versionnée, revue en
