@@ -173,6 +173,22 @@ jobs:
               exit 0
             fi
             version=$($CZ version --project)
+            # README des apps Ktisis : version entre balises <!-- ktisis:version -->,
+            # réécrite quelle que soit la valeur précédente (une app adoptée part
+            # d'une valeur quelconque). Le commit de release, encore local, est
+            # amendé et le tag replacé dessus.
+            if [ -f README.md ] && grep -q '<!-- ktisis:version -->' README.md; then
+              sed -i -E "s#<!-- ktisis:version -->[^<]*<!-- /ktisis:version -->#<!-- ktisis:version -->\`v$version\`<!-- /ktisis:version -->#" README.md
+              if ! git diff --quiet -- README.md; then
+                git add README.md
+                git commit -q --amend --no-edit
+                if [ "$(git cat-file -t "refs/tags/v$version")" = tag ]; then
+                  git tag -f -a "v$version" -m "$(git tag -l --format='%(contents)' "v$version")" >/dev/null
+                else
+                  git tag -f "v$version" >/dev/null
+                fi
+              fi
+            fi
             # Push atomique en fast-forward strict : refusé si la branche a bougé.
             if git push --atomic origin "HEAD:refs/heads/$BRANCH" "refs/tags/v$version"; then
               {

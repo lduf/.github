@@ -89,6 +89,9 @@ config commitizen. La prochaine PR cassante (`feat!: …`) produira `1.0.0`.
 
 ## Images et déploiement
 
+Sur une release, la ligne *Version* du README (balises
+`<!-- ktisis:version -->`) est réécrite dans le commit `chore(release)`.
+
 Sur une release : image GHCR `X.Y.Z`, `X.Y`, `sha-<court>`. Le déploiement
 dépend de l'input `deploy_mode` :
 
