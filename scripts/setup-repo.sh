@@ -9,7 +9,7 @@
 #   - Actions : GITHUB_TOKEN en lecture seule par défaut (chaque workflow
 #     déclare ses permissions), pas d'approbation de PR par les workflows ;
 #   - alertes Dependabot (les PR de mise à jour restent à Renovate) ;
-#   - label no-deploy ;
+#   - labels standard (labels.json : type, area, breaking, blocked, urgent, no-deploy) ;
 #   - rulesets, avec la GitHub App de release comme seul acteur qui contourne :
 #     « main » (PR obligatoire, squash, checks requis, conversations résolues,
 #     pas de force-push ni de suppression), « branch-names »
@@ -96,14 +96,19 @@ gh api -X PUT "repos/$REPO/actions/permissions/workflow" --silent \
 echo "==> $REPO : alertes Dependabot"
 gh api -X PUT "repos/$REPO/vulnerability-alerts" --silent
 
-echo "==> $REPO : label no-deploy"
-if gh api "repos/$REPO/labels/no-deploy" --silent 2>/dev/null; then
-  gh api -X PATCH "repos/$REPO/labels/no-deploy" --silent \
-    -f color=d93f0b -f description="Release sans déploiement (voir docs/release.md)"
-else
-  gh api -X POST "repos/$REPO/labels" --silent -f name=no-deploy \
-    -f color=d93f0b -f description="Release sans déploiement (voir docs/release.md)"
-fi
+echo "==> $REPO : labels standard (labels.json)"
+# Crée ou met à jour les labels du standard ; les autres labels du repo
+# restent en place (les supprimer les retirerait des issues et des PR).
+while IFS= read -r label; do
+  name=$(jq -r .name <<<"$label")
+  enc=$(jq -rn --arg n "$name" '$n | @uri')
+  if gh api "repos/$REPO/labels/$enc" --silent 2>/dev/null; then
+    jq '{color, description}' <<<"$label" \
+      | gh api -X PATCH "repos/$REPO/labels/$enc" --input - --silent
+  else
+    gh api -X POST "repos/$REPO/labels" --input - --silent <<<"$label"
+  fi
+done < <(jq -c '.[]' "$HERE/labels.json")
 
 main_id=$(gh api "repos/$REPO/rulesets" --jq '.[] | select(.name == "main") | .id' | head -1)
 if [ ${#CHECKS[@]} -eq 0 ] && [ -n "$main_id" ]; then

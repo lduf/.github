@@ -2,7 +2,7 @@
 name: Documentation
 about: Demande davantage de documentation
 title: "[DOC]"
-labels: documentation
+labels: 'type: docs'
 assignees: ''
 
 ---

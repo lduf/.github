@@ -2,7 +2,7 @@
 name: Bug issue
 about: Créer un rapport de bug pour qu'il soit traité au plus vite !
 title: "[BUG]"
-labels: bug
+labels: 'type: fix'
 assignees: ''
 
 ---
@@ -16,7 +16,7 @@ Une description rapide et concise sur ce qu'est ce bug
 - Ça peut être dérangeant de temps en temps
 - C'est relou à chaque fois mais on vit avec
 - Ça m'a kick c'est chiant
-- Heu la sauce, mes coordonnées bancaires ont fuité … (appliquer le label URGENT)
+- Heu la sauce, mes coordonnées bancaires ont fuité … (appliquer le label urgent)
 
 **Apparition du bug**
 Comment ce bug est arrivé :
