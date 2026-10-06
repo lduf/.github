@@ -167,7 +167,8 @@ jobs:
   pr-checks:
     if: github.event_name == 'pull_request'
     uses: lduf/.github/.github/workflows/pr-checks.yml@main
-    permissions: { contents: read, pull-requests: read }
+    permissions: { contents: read, pull-requests: write }  # write : labels
+    secrets: inherit  # dépendances vers d'autres repos privés
   ci:  # just check + build de l'image ; python | go | rust
     if: github.event_name == 'pull_request'
     uses: lduf/.github/.github/workflows/ci-python.yml@main

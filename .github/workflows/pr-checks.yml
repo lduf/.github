@@ -10,13 +10,20 @@ name: pr-checks
 #   5. OpenAPI (optionnel) : un changement cassant détecté par oasdiff sans
 #      « ! » fait échouer la CI ;
 #   6. avertissements (non bloquants) : migration ajoutée ou variable
-#      d'environnement supprimée sans « ! ».
+#      d'environnement supprimée sans « ! » ;
+#   7. dépendances : une ligne « Dépend de : owner/repo#N » (ou #N, ou l'URL)
+#      bloque le merge tant que la PR visée n'est pas mergée (ou l'issue
+#      fermée). Label « bloqué » posé et retiré en conséquence ;
+#   8. labels (docs/gouvernance.md) : « type: … » et « breaking » d'après le
+#      titre, « zone: … » d'après les fichiers modifiés. Sans
+#      `pull-requests: write`, simple avertissement.
 #
 # Appel (dans le ci.yml de l'app) :
 #   pr-checks:
 #     if: github.event_name == 'pull_request'
 #     uses: lduf/.github/.github/workflows/pr-checks.yml@main
-#     permissions: { contents: read, pull-requests: read }
+#     permissions: { contents: read, pull-requests: write }
+#     secrets: inherit   # optionnel : dépendances vers d'autres repos privés
 # Le check requis par le ruleset s'appelle « pr-checks / checks ».
 on:
   workflow_call:
@@ -34,6 +41,8 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      HAS_APP_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY != '' }}
     steps:
       - name: Titre au format Conventional Commits
         uses: amannn/action-semantic-pull-request@v6
@@ -235,3 +244,137 @@ jobs:
             echo "::error::oasdiff détecte un changement cassant de l'API, mais le titre n'a pas de « ! » (voir les annotations de l'étape oasdiff)."
             exit 1
           fi
+
+      # --- 7 et 8. Dépendances et labels ------------------------------------
+      # Jeton de l'App (si le ci.yml passe `secrets: inherit`) : lit les PR des
+      # autres repos privés du compte. Sinon, GITHUB_TOKEN : ce repo et les
+      # repos publics seulement.
+      - name: Jeton de lecture des dépendances
+        id: app
+        if: ${{ !cancelled() && env.HAS_APP_KEY == 'true' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID || 'Iv23li1N00eylQ1llniH' }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Dépendances et labels
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_TOKEN: ${{ steps.app.outputs.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: python
+        run: |
+          import json, os, re, subprocess, sys, urllib.error, urllib.parse, urllib.request
+
+          API = os.environ.get("GITHUB_API_URL", "https://api.github.com")
+          repo, number = os.environ["REPO"], int(os.environ["PR_NUMBER"])
+          title = os.environ["PR_TITLE"]
+          body = re.sub(r"<!--.*?-->", "", (os.environ.get("PR_BODY") or "").replace("\r\n", "\n"), flags=re.S)
+          tokens = [t for t in (os.environ.get("APP_TOKEN"), os.environ["GH_TOKEN"]) if t]
+
+          def call(method: str, path: str, token: str, data: object = None) -> object:
+              req = urllib.request.Request(
+                  f"{API}/{path}", method=method,
+                  data=None if data is None else json.dumps(data).encode(),
+                  headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+                           "X-GitHub-Api-Version": "2022-11-28"},
+              )
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  raw = r.read()
+              return json.loads(raw) if raw else None
+
+          def read(path: str) -> dict | None:
+              for token in tokens:
+                  try:
+                      return call("GET", path, token)  # type: ignore[return-value]
+                  except urllib.error.HTTPError:
+                      continue
+              return None
+
+          # --- 7. Dépendances ---------------------------------------------------
+          dep_line = re.compile(r"^\s*[-*]?\s*(?:d[ée]pend(?:s)? (?:de|on)|bloqu[ée]e? par|blocked by)\s*:?\s*(.+)$", re.I | re.M)
+          ref = re.compile(r"https://github\.com/([\w.-]+/[\w.-]+)/(?:pull|issues)/(\d+)|(?<![\w/])([\w.-]+/[\w.-]+)?#(\d+)")
+          deps: list[tuple[str, int]] = []
+          for line in dep_line.findall(body):
+              for m in ref.finditer(line):
+                  target = (m.group(1) or m.group(3) or repo, int(m.group(2) or m.group(4)))
+                  if target != (repo, number) and target not in deps:
+                      deps.append(target)
+
+          blocking: list[str] = []
+          for dep_repo, n in deps:
+              name = f"{dep_repo}#{n}"
+              pr = read(f"repos/{dep_repo}/pulls/{n}")
+              if pr is not None:
+                  if pr.get("merged_at"):
+                      print(f"Dépendance {name} : mergée.")
+                  elif pr.get("state") == "closed":
+                      blocking.append(f"{name} est fermée sans merge : retirer la ligne « Dépend de » si elle n'a plus lieu d'être.")
+                  else:
+                      blocking.append(f"{name} n'est pas encore mergée.")
+                  continue
+              issue = read(f"repos/{dep_repo}/issues/{n}")
+              if issue is None:
+                  blocking.append(f"{name} illisible (n'existe pas, ou repo privé : passer `secrets: inherit` à pr-checks).")
+              elif issue.get("state") != "closed":
+                  blocking.append(f"{name} (issue) n'est pas encore fermée.")
+              else:
+                  print(f"Dépendance {name} : issue fermée.")
+          for msg in blocking:
+              print(f"::error::Dépendance : {msg} Relancer ce check une fois levée.")
+
+          # --- 8. Labels --------------------------------------------------------
+          TYPES = {"feat", "fix", "perf", "refactor", "docs", "test", "build", "ci", "chore", "style", "revert"}
+          ZONES = [  # premier motif qui correspond, par fichier
+              ("template", r"^\.copier-answers\.yml$"),
+              ("ci", r"^\.github/"),
+              ("docs", r"^docs/|^mkdocs\.yml$|\.md$|^\.claude/"),
+              ("api", r"(^|/)openapi\.(json|ya?ml)$"),
+              ("observabilité", r"^observability/|(^|/)(metrics|logs|logging)(\.py|\.go|\.rs|/)"),
+              ("db", r"(^|/)migrations/|alembic|(^|/)db(\.py|\.go|\.rs|/)"),
+              ("auth", r"(^|/)auth[^/]*\.(py|go|rs)$|(^|/)auth/"),
+              ("tests", r"^tests?/|_test\.go$|(^|/)test_[^/]*\.py$|(^|/)conftest\.py$"),
+              ("deps", r"(^|/)(pyproject\.toml|uv\.lock|requirements[^/]*\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock"
+                       r"|package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|renovate\.json|deny\.toml|rust-toolchain\.toml)$"),
+              ("déploiement", r"(^|/)(Dockerfile[^/]*|\.dockerignore|compose[^/]*\.ya?ml)$"),
+              ("front", r"(^|/)(templates|static|web|frontend|ui|assets)/|\.(html|css|scss|js|mjs|ts|tsx|jsx|vue|svelte)$"),
+              ("back", r"^(src|cmd|internal|app|pkg|lib)/"),
+          ]
+          m = re.match(r"^(\w+)(\([^()]*\))?(!)?:", title)
+          wanted = set()
+          if m and m.group(1) in TYPES:
+              wanted.add(f"type: {m.group(1)}")
+          if m and m.group(3):
+              wanted.add("breaking")
+          if blocking:
+              wanted.add("bloqué")
+          files = subprocess.run(["git", "diff", "--name-only", f"{os.environ['BASE_SHA']}...{os.environ['HEAD_SHA']}"],
+                                 check=True, capture_output=True, text=True).stdout.split()
+          for f in files:
+              zone = next((z for z, rx in ZONES if re.search(rx, f)), None)
+              if zone:
+                  wanted.add(f"zone: {zone}")
+
+          def managed(label: str) -> bool:
+              return label.startswith(("type: ", "zone: ")) or label in {"breaking", "bloqué"}
+
+          token = os.environ["GH_TOKEN"]
+          try:
+              current = {l["name"] for l in call("GET", f"repos/{repo}/issues/{number}/labels?per_page=100", token)}  # type: ignore[union-attr]
+              for label in sorted({l for l in current if managed(l)} - wanted):
+                  call("DELETE", f"repos/{repo}/issues/{number}/labels/{urllib.parse.quote(label, safe='')}", token)
+              if wanted - current:
+                  call("POST", f"repos/{repo}/issues/{number}/labels", token, {"labels": sorted(wanted - current)})
+              print(f"Labels : {', '.join(sorted(wanted)) or 'aucun'}")
+          except urllib.error.HTTPError as e:
+              print(f"::warning::Labels non posés ({e.code}) : donner `pull-requests: write` à pr-checks dans le ci.yml. Attendus : {', '.join(sorted(wanted))}")
+
+          sys.exit(1 if blocking else 0)

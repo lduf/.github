@@ -2,7 +2,7 @@
 name: New feature
 about: Suggestion de new feature pour le projet
 title: "[NEW FEATURE]"
-labels: New feature
+labels: 'type: feat'
 assignees: ''
 
 ---

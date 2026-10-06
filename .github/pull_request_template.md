@@ -1,6 +1,9 @@
 ## Quoi
 
-<!-- Ce que change la PR, en 1 à 5 lignes. -->
+<!-- Ce que change la PR, en 1 à 5 lignes.
+  Dépend d'une autre PR ? Ajouter une ligne « Dépend de : lduf/oikos#12 »
+  (ou « Dépend de : #12 » dans ce repo) : le merge est bloqué tant qu'elle
+  n'est pas mergée. -->
 
 ## Pourquoi
 

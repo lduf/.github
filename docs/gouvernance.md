@@ -68,6 +68,61 @@ PR, et `main` est revalidé par la release.
 | Auto-merge autorisé : `gh pr merge --auto --squash` merge dès que les checks passent | réglage `allow_auto_merge` |
 | Messages des commits intermédiaires libres : seul le titre de PR compte | — |
 
+### Cycle de vie d'une PR
+
+1. **Brouillon** à l'ouverture, tant que le travail avance.
+2. **Ready for review** dès que la PR est prête à merger : CI verte sur le
+   dernier commit, description complète, dépendances levées, aucune
+   conversation ouverte. Un agent (Claude) passe **lui-même** sa PR en
+   *Ready for review* à ce moment-là, sans attendre qu'on le lui demande. Il
+   ne merge pas, sauf demande explicite.
+3. **Merge** par Lucas (ou auto-merge) : squash.
+
+### Dépendances entre PR
+
+Une PR qui a besoin d'une autre le dit dans sa description, sur une ligne
+à elle (hors commentaire HTML) :
+
+```markdown
+Dépend de : lduf/.github#11
+Dépend de : #12
+```
+
+Formes acceptées : `Dépend de`, `Depends on`, `Bloqué par`, `Blocked by`,
+suivies de `#N`, `owner/repo#N` ou de l'URL de la PR ou de l'issue.
+`pr-checks / checks` échoue tant qu'une PR visée n'est pas **mergée** (ou
+qu'une issue visée n'est pas fermée), et pose le label `bloqué` : le merge
+est impossible. Une PR visée fermée sans merge bloque aussi : retirer la
+ligne si la dépendance n'a plus lieu d'être.
+
+Le check ne se relance pas tout seul quand la dépendance est mergée :
+*Re-run* du job, ou modifier la description. Un agent qui merge (ou voit
+merger) une dépendance relance les PR qui l'attendaient. Pour lire une PR
+d'un **autre repo privé**, le `ci.yml` passe `secrets: inherit` à pr-checks
+(jeton de l'App de release) ; sans cela, seuls ce repo et les repos publics
+sont lisibles.
+
+## Labels
+
+Les mêmes dans tous les repos ([`labels.json`](../labels.json)), créés par
+`setup-repo` et maintenus par la réconciliation du lundi. Les autres labels
+d'un repo ne sont pas supprimés.
+
+| Famille | Labels | Posé par |
+|---|---|---|
+| Type | `type: feat`, `type: fix`, `type: perf`, `type: refactor`, `type: docs`, `type: test`, `type: build`, `type: ci`, `type: chore`, `type: style`, `type: revert` | PR : `pr-checks`, d'après le titre. Issue : le modèle d'issue, ou à la main |
+| Cassant | `breaking` | `pr-checks`, titre avec `!` |
+| Zone | `zone: back`, `zone: front`, `zone: api`, `zone: auth`, `zone: db`, `zone: tests`, `zone: deps`, `zone: déploiement`, `zone: observabilité`, `zone: ci`, `zone: docs`, `zone: template` | PR : `pr-checks`, d'après les fichiers modifiés (recalculé à chaque run). Issue : à la main |
+| État | `bloqué` | `pr-checks`, dépendance non levée |
+| Priorité | `urgent` | à la main |
+| Release | `no-deploy` | à la main ([release.md](release.md)) |
+
+Sur les PR, `type:`, `zone:`, `breaking` et `bloqué` sont gérés par
+`pr-checks` : un ajout à la main est écrasé au run suivant. Les autres
+labels restent libres. Une issue ouverte par un agent porte au moins un
+`type:` et une `zone:`. Pour que `pr-checks` pose les labels, le `ci.yml`
+lui donne `pull-requests: write` ; sinon, simple avertissement.
+
 ## Secrets et sécurité
 
 | Règle | Mécanisme |
@@ -106,7 +161,7 @@ branche `gh-pages`. `setup-repo` l'active si le repo a
 - Topic `ktisis` : marque le repo comme soumis au standard. La réconciliation
   hebdomadaire ne touche que ces repos : retirer le topic sort un repo du
   périmètre.
-- Label `no-deploy` ([release.md](release.md)).
+- Labels du standard ([plus haut](#labels)).
 
 ## Ce que GitHub Pro n'offre pas (compte perso, repos privés)
 
