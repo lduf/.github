@@ -146,7 +146,7 @@ Les checks requis sont ceux passés en option, sinon ceux du ruleset `main`
 existant (une relance ne les écrase pas), sinon `pr-checks / checks` et
 `ci / check`. Le script applique le [standard Ktisis](gouvernance.md) :
 réglages de merge et d'Actions, alertes Dependabot, label `no-deploy`,
-rulesets `main`, `branch-names`, `linear-history` et `release-tags` (seule
+rulesets `main`, `branch-names` et `release-tags` (seule
 l'App de release les contourne), Pages par Actions si le repo a un
 `pages.yml`, topic `ktisis`. Il pose aussi l'identité de l'App : variable
 `RELEASE_APP_CLIENT_ID` et secret `RELEASE_APP_PRIVATE_KEY`. Il est

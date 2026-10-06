@@ -13,9 +13,9 @@
 #   - rulesets, avec la GitHub App de release comme seul acteur qui contourne :
 #     « main » (PR obligatoire, squash, checks requis, conversations résolues,
 #     pas de force-push ni de suppression), « branch-names »
-#     (création de branche limitée aux préfixes conventionnels),
-#     « linear-history » (aucun commit de merge sur aucune branche : on se met
-#     à jour par rebase) et « release-tags » (tags v* réservés au bot) ;
+#     (création de branche limitée aux préfixes conventionnels) et
+#     « release-tags » (tags v* réservés au bot) ; les rulesets retirés du
+#     standard (« linear-history ») sont supprimés ;
 #   - GitHub Pages publié par GitHub Actions (build_type workflow) si le repo
 #     a un .github/workflows/pages.yml ;
 #   - topic « ktisis » : le repo entre dans le périmètre de la réconciliation
@@ -140,7 +140,18 @@ upsert_ruleset() {
 }
 upsert_ruleset "$HERE/rulesets/main.json"
 upsert_ruleset "$HERE/rulesets/branch-names.json"
-upsert_ruleset "$HERE/rulesets/linear-history.json"
+# Rulesets retirés du standard. « linear-history » (aucun merge sur aucune
+# branche) bloquait la création de toute branche dans un repo dont l'historique
+# contient d'anciens commits de merge : la règle « pas de merge » est vérifiée
+# par pr-checks, sur les seuls commits de la PR.
+OBSOLETE_RULESETS=(linear-history)
+for name in "${OBSOLETE_RULESETS[@]}"; do
+  id=$(gh api "repos/$REPO/rulesets" --jq ".[] | select(.name == \"$name\") | .id" | head -1)
+  if [ -n "$id" ]; then
+    echo "==> $REPO : ruleset « $name » supprimé (retiré du standard)"
+    gh api -X DELETE "repos/$REPO/rulesets/$id" --silent
+  fi
+done
 upsert_ruleset "$HERE/rulesets/release-tags.json"
 
 echo "==> $REPO : topic ktisis"

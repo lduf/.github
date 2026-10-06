@@ -33,9 +33,13 @@ ruleset n'est pas touchée.
 
 | Règle | Mécanisme |
 |---|---|
-| Aucun commit de merge, sur aucune branche | ruleset `linear-history` : un push qui contient un merge est refusé |
+| Aucun commit de merge dans une PR | `pr-checks / checks` (requis) : un commit de merge entre la base et la tête de la PR fait échouer le check, donc le merge est bloqué |
 | On se met à jour par **rebase** sur `origin/main` | conséquence de la règle précédente |
-| Sur GitHub : *Update branch* → **Update with rebase** | bouton affiché (`allow_update_branch`), l'option merge est refusée par le ruleset |
+| Sur GitHub : *Update branch* → **Update with rebase** | bouton affiché (`allow_update_branch`) ; l'option merge fait échouer `pr-checks` |
+| Aucun marqueur de conflit (`<<<<<<<`, `>>>>>>>`) dans un fichier modifié | `pr-checks / checks` |
+
+Le contrôle porte sur les seuls commits de la PR : les anciens commits de
+merge de `main` ne gênent pas ([ADR 0008](adr/0008-rebase-verifie-par-pr-checks.md)).
 
 En local, une fois pour toutes :
 

@@ -1,6 +1,6 @@
 # 0007 — Standard Ktisis : règles de repo appliquées par `setup-repo`, vérifiées par `ktisis audit`
 
-- Statut : Acceptée
+- Statut : Acceptée, amendée par [0008](0008-rebase-verifie-par-pr-checks.md) (ruleset `linear-history` retiré)
 - Date : 2026-10-06
 
 ## Contexte
