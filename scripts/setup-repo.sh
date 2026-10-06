@@ -9,7 +9,7 @@
 #   - Actions : GITHUB_TOKEN en lecture seule par défaut (chaque workflow
 #     déclare ses permissions), pas d'approbation de PR par les workflows ;
 #   - alertes Dependabot (les PR de mise à jour restent à Renovate) ;
-#   - labels standard (labels.json : type, zone, bloqué, urgent, no-deploy) ;
+#   - labels standard (labels.json : type, area, breaking, blocked, urgent, no-deploy) ;
 #   - rulesets, avec la GitHub App de release comme seul acteur qui contourne :
 #     « main » (PR obligatoire, squash, checks requis, conversations résolues,
 #     pas de force-push ni de suppression), « branch-names »

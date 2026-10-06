@@ -13,9 +13,9 @@ name: pr-checks
 #      d'environnement supprimée sans « ! » ;
 #   7. dépendances : une ligne « Dépend de : owner/repo#N » (ou #N, ou l'URL)
 #      bloque le merge tant que la PR visée n'est pas mergée (ou l'issue
-#      fermée). Label « bloqué » posé et retiré en conséquence ;
+#      fermée). Label « blocked » posé et retiré en conséquence ;
 #   8. labels (docs/gouvernance.md) : « type: … » et « breaking » d'après le
-#      titre, « zone: … » d'après les fichiers modifiés. Sans
+#      titre, « area: … » d'après les fichiers modifiés. Sans
 #      `pull-requests: write`, simple avertissement.
 #
 # Appel (dans le ci.yml de l'app) :
@@ -333,18 +333,18 @@ jobs:
 
           # --- 8. Labels --------------------------------------------------------
           TYPES = {"feat", "fix", "perf", "refactor", "docs", "test", "build", "ci", "chore", "style", "revert"}
-          ZONES = [  # premier motif qui correspond, par fichier
+          AREAS = [  # premier motif qui correspond, par fichier
               ("template", r"^\.copier-answers\.yml$"),
               ("ci", r"^\.github/"),
               ("docs", r"^docs/|^mkdocs\.yml$|\.md$|^\.claude/"),
               ("api", r"(^|/)openapi\.(json|ya?ml)$"),
-              ("observabilité", r"^observability/|(^|/)(metrics|logs|logging)(\.py|\.go|\.rs|/)"),
+              ("observability", r"^observability/|(^|/)(metrics|logs|logging)(\.py|\.go|\.rs|/)"),
               ("db", r"(^|/)migrations/|alembic|(^|/)db(\.py|\.go|\.rs|/)"),
               ("auth", r"(^|/)auth[^/]*\.(py|go|rs)$|(^|/)auth/"),
               ("tests", r"^tests?/|_test\.go$|(^|/)test_[^/]*\.py$|(^|/)conftest\.py$"),
               ("deps", r"(^|/)(pyproject\.toml|uv\.lock|requirements[^/]*\.txt|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock"
                        r"|package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|renovate\.json|deny\.toml|rust-toolchain\.toml)$"),
-              ("déploiement", r"(^|/)(Dockerfile[^/]*|\.dockerignore|compose[^/]*\.ya?ml)$"),
+              ("deploy", r"(^|/)(Dockerfile[^/]*|\.dockerignore|compose[^/]*\.ya?ml)$"),
               ("front", r"(^|/)(templates|static|web|frontend|ui|assets)/|\.(html|css|scss|js|mjs|ts|tsx|jsx|vue|svelte)$"),
               ("back", r"^(src|cmd|internal|app|pkg|lib)/"),
           ]
@@ -355,16 +355,16 @@ jobs:
           if m and m.group(3):
               wanted.add("breaking")
           if blocking:
-              wanted.add("bloqué")
+              wanted.add("blocked")
           files = subprocess.run(["git", "diff", "--name-only", f"{os.environ['BASE_SHA']}...{os.environ['HEAD_SHA']}"],
                                  check=True, capture_output=True, text=True).stdout.split()
           for f in files:
-              zone = next((z for z, rx in ZONES if re.search(rx, f)), None)
-              if zone:
-                  wanted.add(f"zone: {zone}")
+              area = next((a for a, rx in AREAS if re.search(rx, f)), None)
+              if area:
+                  wanted.add(f"area: {area}")
 
           def managed(label: str) -> bool:
-              return label.startswith(("type: ", "zone: ")) or label in {"breaking", "bloqué"}
+              return label.startswith(("type: ", "area: ")) or label in {"breaking", "blocked"}
 
           token = os.environ["GH_TOKEN"]
           try:

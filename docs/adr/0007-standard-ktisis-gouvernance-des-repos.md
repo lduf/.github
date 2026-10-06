@@ -27,8 +27,8 @@ CodeQL ni de push rulesets sur les repos privés, ni de merge queue.
   - `linear-history` : aucun commit de merge sur aucune branche, donc mise à
     jour par rebase ;
   - `release-tags` : tags `v*` réservés au bot.
-- Labels uniformes (`labels.json` : `type:`, `zone:`, `breaking`,
-  `bloqué`, `urgent`, `no-deploy`), posés automatiquement sur les PR par
+- Labels uniformes (`labels.json` : `type:`, `area:`, `breaking`,
+  `blocked`, `urgent`, `no-deploy`), posés automatiquement sur les PR par
   `pr-checks` ; dépendances entre PR (`Dépend de : owner/repo#N`) qui
   bloquent le merge ; un agent passe sa PR en *Ready for review* dès
   qu'elle est prête (ajout du 2026-10-06).

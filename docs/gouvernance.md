@@ -91,7 +91,7 @@ Dépend de : #12
 Formes acceptées : `Dépend de`, `Depends on`, `Bloqué par`, `Blocked by`,
 suivies de `#N`, `owner/repo#N` ou de l'URL de la PR ou de l'issue.
 `pr-checks / checks` échoue tant qu'une PR visée n'est pas **mergée** (ou
-qu'une issue visée n'est pas fermée), et pose le label `bloqué` : le merge
+qu'une issue visée n'est pas fermée), et pose le label `blocked` : le merge
 est impossible. Une PR visée fermée sans merge bloque aussi : retirer la
 ligne si la dépendance n'a plus lieu d'être.
 
@@ -112,15 +112,15 @@ d'un repo ne sont pas supprimés.
 |---|---|---|
 | Type | `type: feat`, `type: fix`, `type: perf`, `type: refactor`, `type: docs`, `type: test`, `type: build`, `type: ci`, `type: chore`, `type: style`, `type: revert` | PR : `pr-checks`, d'après le titre. Issue : le modèle d'issue, ou à la main |
 | Cassant | `breaking` | `pr-checks`, titre avec `!` |
-| Zone | `zone: back`, `zone: front`, `zone: api`, `zone: auth`, `zone: db`, `zone: tests`, `zone: deps`, `zone: déploiement`, `zone: observabilité`, `zone: ci`, `zone: docs`, `zone: template` | PR : `pr-checks`, d'après les fichiers modifiés (recalculé à chaque run). Issue : à la main |
-| État | `bloqué` | `pr-checks`, dépendance non levée |
+| Area | `area: back`, `area: front`, `area: api`, `area: auth`, `area: db`, `area: tests`, `area: deps`, `area: deploy`, `area: observability`, `area: ci`, `area: docs`, `area: template` | PR : `pr-checks`, d'après les fichiers modifiés (recalculé à chaque run). Issue : à la main |
+| État | `blocked` | `pr-checks`, dépendance non levée |
 | Priorité | `urgent` | à la main |
 | Release | `no-deploy` | à la main ([release.md](release.md)) |
 
-Sur les PR, `type:`, `zone:`, `breaking` et `bloqué` sont gérés par
+Sur les PR, `type:`, `area:`, `breaking` et `blocked` sont gérés par
 `pr-checks` : un ajout à la main est écrasé au run suivant. Les autres
 labels restent libres. Une issue ouverte par un agent porte au moins un
-`type:` et une `zone:`. Pour que `pr-checks` pose les labels, le `ci.yml`
+`type:` et une `area:`. Pour que `pr-checks` pose les labels, le `ci.yml`
 lui donne `pull-requests: write` ; sinon, simple avertissement.
 
 ## Secrets et sécurité
