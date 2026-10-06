@@ -29,6 +29,9 @@ CodeQL ni de push rulesets sur les repos privés, ni de merge queue.
   - `release-tags` : tags `v*` réservés au bot.
 - `pr-checks` ajoute **gitleaks** sur les commits de la PR, à la place du
   secret scanning indisponible.
+- Il est **réconcilié** chaque semaine par le workflow `gouvernance` de
+  `lduf/.github` : `setup-repo` rejoué sur tous les repos au topic `ktisis`,
+  avec le token de l'App de release (installation « All repositories »).
 - Il est **vérifié** par `ktisis audit`, qui compare les réglages GitHub du
   repo au standard.
 - Il **évolue** par PR sur `lduf/.github`. Relancer `setup-repo` propage la
@@ -46,6 +49,9 @@ CodeQL ni de push rulesets sur les repos privés, ni de merge queue.
   perso).
 - Un nouveau préfixe d'outil (autre bot) demande une PR sur
   `rulesets/branch-names.json`.
+- Un réglage changé à la main dans un repo `ktisis` est écrasé le lundi
+  suivant : une exception passe par le standard (PR sur `lduf/.github`), ou
+  par le retrait du topic.
 
 ## Alternatives écartées
 
@@ -57,3 +63,5 @@ CodeQL ni de push rulesets sur les repos privés, ni de merge queue.
 - **Contrôle du nom de branche dans la CI** : arrive après le push, alors que
   le ruleset refuse la création elle-même.
 - **Réglages appliqués à la main** : dérivent sans qu'on le voie.
+- **Audit seul, sans réconciliation** : signale l'écart mais laisse le repo
+  dériver jusqu'à une action manuelle.

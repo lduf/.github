@@ -23,7 +23,9 @@ de PR, et socle commun des apps générées depuis
 - [Dashboard Grafana générique](observability/app-generic-dashboard.json)
   (variable `$app`) : vues HTTP communes à toutes les apps.
 - [`scripts/setup-repo.sh`](scripts/setup-repo.sh) et [`rulesets/`](rulesets/) :
-  applique le standard à un repo en une commande (réglages, rulesets, Pages).
+  applique le standard à un repo en une commande (réglages, rulesets, Pages) ;
+  [`gouvernance.yml`](.github/workflows/gouvernance.yml) le rejoue chaque
+  semaine sur tous les repos au topic `ktisis`.
 - `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` : modèles par
   défaut de l'organisation.
 

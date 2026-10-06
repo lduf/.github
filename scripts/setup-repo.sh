@@ -18,8 +18,8 @@
 #     à jour par rebase) et « release-tags » (tags v* réservés au bot) ;
 #   - GitHub Pages publié par GitHub Actions (build_type workflow) si le repo
 #     a un .github/workflows/pages.yml ;
-#   - topic « ktisis » : inventaire des repos soumis au standard
-#     (docs/gouvernance.md) ;
+#   - topic « ktisis » : le repo entre dans le périmètre de la réconciliation
+#     hebdomadaire (workflow gouvernance, docs/gouvernance.md) ;
 #   - variable RELEASE_APP_CLIENT_ID (identifiant public de l'App) et, si --key
 #     est fourni, secret RELEASE_APP_PRIVATE_KEY ;
 #   - avec --base-tag, tag de base vX.Y.Z (migration d'un repo qui a déjà des

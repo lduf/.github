@@ -7,6 +7,10 @@ qu'une recommandation, et le tableau le dit.
 
 - **Appliquer** : workflow `setup-repo` (ou `scripts/setup-repo.sh`), idempotent.
   Le relancer remet au standard un repo qui a dérivé.
+- **Réconcilier** : workflow `gouvernance`, chaque lundi. Il rejoue
+  `setup-repo` sur tous les repos qui portent le topic `ktisis`. Un réglage
+  changé à la main revient au standard ; un échec fait échouer le run
+  (e-mail de GitHub). À la demande : `gh workflow run gouvernance.yml -R lduf/.github [-f repo=mon-app]`.
 - **Vérifier** : `ktisis audit` dans le repo (section GitHub).
 - **Faire évoluer** : PR sur `lduf/.github` (rulesets, script, ce document).
   Le standard est versionné avec ce repo.
@@ -99,7 +103,9 @@ branche `gh-pages`. `setup-repo` l'active si le repo a
 
 - Wiki et Projects désactivés : la doc vit dans `docs/` (versionnée, revue en
   PR), le suivi dans les issues.
-- Topic `ktisis` : marque le repo comme soumis au standard (inventaire).
+- Topic `ktisis` : marque le repo comme soumis au standard. La réconciliation
+  hebdomadaire ne touche que ces repos : retirer le topic sort un repo du
+  périmètre.
 - Label `no-deploy` ([release.md](release.md)).
 
 ## Ce que GitHub Pro n'offre pas (compte perso, repos privés)
