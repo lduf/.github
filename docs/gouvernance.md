@@ -57,7 +57,8 @@ Les PR n'ont **pas** besoin d'être à jour pour être mergées
 pousse `chore(release)` sur `main` : exiger une branche à jour forcerait un
 rebase de toutes les PR ouvertes à chaque release. Le squash rejoue le diff de
 la PR sur le `main` du moment. Les checks requis tournent sur la tête de la
-PR, et `main` est revalidé par la release.
+PR, et `main` est revalidé par la release (build de l'image) ; pour le
+template `lduf/ktisis`, par la matrice complète lancée chaque nuit.
 
 ## Commits et PR
 
@@ -71,15 +72,24 @@ PR, et `main` est revalidé par la release.
 | Pas de version ni de CHANGELOG à la main | `pr-checks / checks` ([release.md](release.md)) |
 | Auto-merge autorisé : `gh pr merge --auto --squash` merge dès que les checks passent | réglage `allow_auto_merge` |
 | Messages des commits intermédiaires libres : seul le titre de PR compte | — |
+| CI sobre : pas de CI lourde en brouillon ni sur une édition de titre, de description ou de labels ; pas de re-validation de `main` après merge ; un job par contrôle plutôt que des jobs de quelques secondes ([ADR 0009](adr/0009-sobriete-ci.md)) | workflows réutilisables + `ci.yml` / `pr-checks.yml` générés par le template |
+| Labels posés en un seul appel (une liste), pas un par un | consigne (chaque appel `labeled` relance `pr-checks`) |
 
 ### Cycle de vie d'une PR
 
-1. **Brouillon** à l'ouverture, tant que le travail avance.
-2. **Ready for review** dès que la PR est prête à merger : CI verte sur le
-   dernier commit, description complète, dépendances levées, aucune
-   conversation ouverte. Un agent (Claude) passe **lui-même** sa PR en
-   *Ready for review* à ce moment-là, sans attendre qu'on le lui demande. Il
-   ne merge pas, sauf demande explicite.
+1. **Brouillon** à l'ouverture, tant que le travail avance. La CI lourde
+   (`ci / check`, matrice du template) ne tourne pas sur un brouillon :
+   seul `pr-checks` vérifie titre, description et dépendances. On valide en
+   local avant chaque push (`just check`, et `just build` si le Dockerfile
+   bouge) ([ADR 0009](adr/0009-sobriete-ci.md)).
+2. **Ready for review** dès que la PR est prête à merger : `just check` vert
+   en local sur le dernier commit, description complète, dépendances levées,
+   aucune conversation ouverte. Le passage en *Ready for review* lance la CI ;
+   si elle échoue, on corrige par un nouveau push (la PR reste prête). Un
+   agent (Claude) passe **lui-même** sa PR en *Ready for review* à ce
+   moment-là, sans attendre qu'on le lui demande. Il ne merge pas, sauf
+   demande explicite. Tant que la PR est en brouillon, `ci / check` manque :
+   GitHub bloque le merge.
 3. **Merge** par Lucas (ou auto-merge) : squash.
 
 ### Dépendances entre PR

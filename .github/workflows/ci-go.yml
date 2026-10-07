@@ -1,12 +1,13 @@
 name: ci-go
 
 # Qualité d'une app Go (ADR 0002) : exactement `just check` (gofmt, vet,
-# golangci-lint, tests -race) ; build de l'image (sans push)
-# en parallèle.
+# golangci-lint, tests -race), puis build de l'image (sans push), dans un
+# seul job (ADR 0009 : chaque job est facturé à la minute entamée).
 # Check requis : « ci / check ».
 #
+# Appel (dans le ci.yml de l'app, PR hors brouillon seulement) :
 #   ci:
-#     if: github.event_name == 'pull_request'
+#     if: github.event_name == 'pull_request' && !github.event.pull_request.draft
 #     uses: lduf/.github/.github/workflows/ci-go.yml@main
 #     permissions: { contents: read }
 on:
@@ -22,8 +23,8 @@ on:
         default: latest
 
 jobs:
-  just-check:
-    name: just check
+  check:
+    name: check
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -39,39 +40,15 @@ jobs:
       - uses: extractions/setup-just@v4
       - name: just check
         run: just check
-
-  # En parallèle de `just check` : le build de l'image n'en dépend pas.
-  image:
-    if: inputs.build_image
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
+      # Build de l'image (sans push) dans le même job : un seul démarrage de
+      # runner et une seule minute arrondie au lieu de trois jobs parallèles.
       - uses: docker/setup-buildx-action@v4
+        if: inputs.build_image
       - name: Build de l'image
+        if: inputs.build_image
         uses: docker/build-push-action@v7
         with:
           context: .
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  # Check requis « ci / check » : vert seulement si `just check` et l'image
-  # le sont (un job sauté compterait comme un succès pour GitHub).
-  check:
-    if: ${{ !cancelled() }}
-    needs: [just-check, image]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: just check et image
-        env:
-          CHECK: ${{ needs.just-check.result }}
-          IMAGE: ${{ needs.image.result }}
-          BUILD_IMAGE: ${{ inputs.build_image }}
-        run: |
-          expected=success; [ "$BUILD_IMAGE" = true ] || expected=skipped
-          if [ "$CHECK" != success ] || [ "$IMAGE" != "$expected" ]; then
-            echo "::error::just check : $CHECK, image : $IMAGE"
-            exit 1
-          fi
