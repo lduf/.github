@@ -1,6 +1,6 @@
 # 0009 — CI sobre : déclencheurs restreints, jobs regroupés, matrice du template ciblée
 
-- Statut : Acceptée
+- Statut : Acceptée, point 6 remplacé par [0010](0010-template-update-apres-chaque-release.md)
 - Date : 2026-10-07
 
 ## Contexte

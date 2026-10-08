@@ -15,7 +15,8 @@ qui *remplace* l'ancienne (statut mis à jour dans les deux).
 | [0006](0006-contrat-app-commun.md) | Un contrat d'app unique pour les trois langages | Acceptée |
 | [0007](0007-standard-ktisis-gouvernance-des-repos.md) | Standard Ktisis : règles de repo appliquées par `setup-repo`, vérifiées par `ktisis audit` | Acceptée, amendée par 0008 |
 | [0008](0008-rebase-verifie-par-pr-checks.md) | « Pas de merge, on rebase » vérifié par pr-checks, pas par un ruleset | Acceptée |
-| [0009](0009-sobriete-ci.md) | CI sobre : déclencheurs restreints, jobs regroupés, matrice du template ciblée | Acceptée |
+| [0009](0009-sobriete-ci.md) | CI sobre : déclencheurs restreints, jobs regroupés, matrice du template ciblée | Acceptée, point 6 remplacé par 0010 |
+| [0010](0010-template-update-apres-chaque-release.md) | Mises à jour du template poussées après chaque release | Acceptée |
 
 ## Modèle
 
