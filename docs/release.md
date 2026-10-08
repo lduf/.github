@@ -154,26 +154,43 @@ idempotent : le relancer remet au standard un repo qui a dérivé. Pour Pages,
 l'App doit avoir la permission *Pages: read and write*. L'App doit être installée sur le repo : le plus simple est une
 installation « All repositories ».
 
-Le `ci.yml` de l'app :
+Deux workflows dans l'app ([ADR 0009](adr/0009-sobriete-ci.md)) : `pr-checks.yml`, léger,
+écoute aussi les éditions et les labels ; `ci.yml` ne tourne que sur du code nouveau, hors
+brouillon, et pour la release.
 
 ```yaml
+# .github/workflows/pr-checks.yml
+name: pr-checks
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review, labeled, unlabeled]
+concurrency:
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  pr-checks:
+    uses: lduf/.github/.github/workflows/pr-checks.yml@main
+    permissions: { contents: read, pull-requests: write }  # write : labels
+    secrets: inherit  # dépendances vers d'autres repos privés
+```
+
+```yaml
+# .github/workflows/ci.yml
 name: ci
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
       version: { description: "Version existante à redéployer (X.Y.Z)", required: true }
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  pr-checks:
-    if: github.event_name == 'pull_request'
-    uses: lduf/.github/.github/workflows/pr-checks.yml@main
-    permissions: { contents: read, pull-requests: write }  # write : labels
-    secrets: inherit  # dépendances vers d'autres repos privés
-  ci:  # just check + build de l'image ; python | go | rust
-    if: github.event_name == 'pull_request'
+  ci:  # just check + build de l'image, un seul job ; python | go | rust
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
     uses: lduf/.github/.github/workflows/ci-python.yml@main
     permissions: { contents: read }
   release:

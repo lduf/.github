@@ -20,12 +20,18 @@ name: pr-checks
 #      titre, « area: … » d'après les fichiers modifiés. Sans
 #      `pull-requests: write`, simple avertissement.
 #
-# Appel (dans le ci.yml de l'app) :
-#   pr-checks:
-#     if: github.event_name == 'pull_request'
-#     uses: lduf/.github/.github/workflows/pr-checks.yml@main
-#     permissions: { contents: read, pull-requests: write }
-#     secrets: inherit   # optionnel : dépendances vers d'autres repos privés
+# Appel : dans un workflow à part (.github/workflows/pr-checks.yml de l'app),
+# seul à écouter edited et labeled/unlabeled : éditer le titre, la
+# description ou les labels relance ce contrôle (un job léger), jamais la CI
+# lourde (ADR 0009).
+#   on:
+#     pull_request:
+#       types: [opened, edited, synchronize, reopened, ready_for_review, labeled, unlabeled]
+#   jobs:
+#     pr-checks:
+#       uses: lduf/.github/.github/workflows/pr-checks.yml@main
+#       permissions: { contents: read, pull-requests: write }
+#       secrets: inherit   # optionnel : dépendances vers d'autres repos privés
 # Le check requis par le ruleset s'appelle « pr-checks / checks ».
 on:
   workflow_call:
