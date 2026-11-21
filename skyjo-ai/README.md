@@ -70,6 +70,14 @@ Modèle RL (échauffement + 400 itérations), 400 parties par ligne, sièges tir
 
 Algorithme génétique seul, population aléatoire, 40 générations : **échec** (0 victoire contre greedy à 3 joueurs, score moyen 124 contre 40). L'évolution depuis des poids aléatoires ne rattrape pas l'heuristique dans ce budget.
 
+Hybride (GA 25 générations, population amorcée par le modèle RL, mutations `sigma=0.03`) : bat greedy
+(41 % de victoires à 3 joueurs sur 400 parties) mais **n'améliore pas le RL seul** : en duel direct à 3 joueurs
+(600 parties, RL / hybride / greedy), victoires 41 % / 34 % / 24 %, scores moyens 81,6 / 84,9 / 98,8.
+L'écart RL-hybride est modeste et n'a été mesuré que sur une graine d'entraînement.
+
+Bilan : l'imitation puis le RL donnent le meilleur agent ; le GA seul échoue, et le GA en affinage n'apporte rien ici.
+Les agents restent comparés à un seul adversaire de référence (`greedy`), pas à de vrais joueurs humains.
+
 ## Limites connues
 
 - Le réseau ne voit pas les totaux de la partie (seulement la manche) : il ne sait pas qu'il vaut mieux finir tôt/tard selon la course à 100.
