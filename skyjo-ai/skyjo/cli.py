@@ -58,7 +58,7 @@ def cmd_ga(a):
     from .ga import train_ga
 
     inits = [Net.load(p)[1] for p in a.init.split(",")] if a.init else None
-    train_ga(generations=a.generations, pop_size=a.pop, tables=a.tables, seed=a.seed,
+    train_ga(generations=a.generations, pop_size=a.pop, tables=a.tables, sigma=a.sigma, seed=a.seed,
              init_thetas=inits, out=a.out, workers=a.workers)
 
 
@@ -100,6 +100,7 @@ def main():
     g.add_argument("--pop", type=int, default=40)
     g.add_argument("--tables", type=int, default=24)
     g.add_argument("--seed", type=int, default=0)
+    g.add_argument("--sigma", type=float, default=0.15, help="écart-type des mutations (0.02 conseillé pour affiner un modèle RL)")
     g.add_argument("--init", default=None, help="modèles .npz (séparés par ,) pour amorcer la population (hybride RL->GA)")
     g.add_argument("--out", default="models/ga.npz")
     g.add_argument("--workers", type=int, default=4)

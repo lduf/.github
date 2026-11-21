@@ -26,9 +26,9 @@ Je n'ai pas pu confirmer ces trois points dans le texte officiel, seulement dans
 pip install numpy pytest
 python -m pytest tests                                   # tests du moteur
 python -m skyjo demo --agents greedy,greedy,random --verbose   # une partie commentée
-python -m skyjo train-rl --iterations 600 --out models/rl.npz
+python -m skyjo train-rl --imitate 600 --iterations 400 --rounds 48 --lr 5e-4 --out models/rl.npz
 python -m skyjo train-ga --generations 40 --out models/ga.npz --workers 4
-python -m skyjo train-ga --init models/rl.npz --out models/hybrid.npz   # RL puis GA
+python -m skyjo train-ga --init models/rl.npz --sigma 0.02 --generations 25 --out models/hybrid.npz   # RL puis GA
 python -m skyjo evaluate --agents nn:models/rl.npz,greedy,greedy --games 300 --workers 4
 ```
 
@@ -50,12 +50,25 @@ Le nombre de joueurs est le nombre d'agents listés (2 à 8) ; les sièges sont 
 espérance des cartes inconnues par comptage de cartes, score projeté vs adversaires, tours restants…) → 64 → 32 → 26 logits
 (source ; placer en case i ; défausser et retourner la case i) + une tête valeur. Les actions illégales sont masquées.
 
-**RL** : un épisode est une manche à N joueurs (2–5). Tous les sièges apprenants partagent les poids ; la récompense est
+**RL** : le réseau est d'abord échauffé par imitation du bot greedy (`--imitate`, clonage de comportement, ~96 % de précision) ; sans cet échauffement, le RL depuis zéro n'a pas appris en 600 itérations (0 victoire contre greedy). Ensuite, un épisode est une manche à N joueurs (2–5). Tous les sièges apprenants partagent les poids ; la récompense est
 `(score moyen des adversaires − son score) / 10`, doublement inclus. Une part des sièges est tenue par le bot greedy.
 
 **Génétique** : le génome est le vecteur de poids. Fitness = écart de score par manche sur des tables de 2 à 4 joueurs
 (contre greedy et les meilleurs génomes précédents), mêmes graines pour toute la génération. `--init` permet d'amorcer
 la population avec un modèle RL (hybride).
+
+## Résultats (une seule graine d'entraînement par méthode)
+
+Modèle RL (échauffement + 400 itérations), 400 parties par ligne, sièges tirés au sort, adversaires = bots `greedy` :
+
+| Table | Victoires du RL | Score moyen RL | Score moyen d'un greedy |
+|---|---|---|---|
+| 2 joueurs | 64 % (hasard : 50 %) | 85,4 | 104,6 |
+| 3 joueurs | 46 % (hasard : 33 %) | 75,8 | 90,7 à 93,4 |
+| 4 joueurs | 30 % (hasard : 25 %) | 78,1 | 85,8 à 87,3 |
+| 6 joueurs | 20 % (hasard : 17 %) | 76,5 | 80,8 à 83,1 |
+
+Algorithme génétique seul, population aléatoire, 40 générations : **échec** (0 victoire contre greedy à 3 joueurs, score moyen 124 contre 40). L'évolution depuis des poids aléatoires ne rattrape pas l'heuristique dans ce budget.
 
 ## Limites connues
 
