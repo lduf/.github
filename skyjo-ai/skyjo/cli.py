@@ -51,7 +51,7 @@ def cmd_rl(a):
     init = Net.load(a.init)[1] if a.init else None
     train_rl(iterations=a.iterations, rounds_per_iter=a.rounds, lr=a.lr, seed=a.seed,
              n_range=(a.min_players, a.max_players), greedy_prob=a.greedy_prob,
-             init_theta=init, out=a.out, eval_every=a.eval_every, workers=a.workers)
+             init_theta=init, imitate_rounds=a.imitate, out=a.out, eval_every=a.eval_every, eval_games=a.eval_games, workers=a.workers)
 
 
 def cmd_ga(a):
@@ -88,8 +88,10 @@ def main():
     r.add_argument("--max-players", type=int, default=5)
     r.add_argument("--greedy-prob", type=float, default=0.25)
     r.add_argument("--init", default=None)
+    r.add_argument("--imitate", type=int, default=0, help="manches de clonage du bot greedy avant le RL")
     r.add_argument("--out", default="models/rl.npz")
     r.add_argument("--eval-every", type=int, default=25)
+    r.add_argument("--eval-games", type=int, default=60)
     r.add_argument("--workers", type=int, default=1)
     r.set_defaults(f=cmd_rl)
 
